@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from "react"
-import { ProgressBar } from "@phreshos/react-ui"
+import { lazy, Suspense, useEffect, useMemo, useState } from "react"
+import { ProgressBar, useAppearance, useThemedValue } from "@phreshos/react-ui"
+import { marked } from "marked"
 import FileIcon from "./file-icon"
 import { formatModified, formatSize, kindNames, type Entry } from "./entries"
 import { readFile } from "./folders"
@@ -18,6 +19,19 @@ const mediaTypes: Readonly<Record<string, string>> = {
     pdf: "application/pdf"
 }
 
+/**
+ * Files that are written as text and read as something else, a page or a picture, show either way:
+ * as they look, or as their code.
+ */
+const rendered: Readonly<Record<string, "markdown" | "page" | "picture">> = { md: "markdown", markdown: "markdown", html: "page", htm: "page", svg: "picture" }
+
+export type FileMode = "preview" | "code"
+
+/** Whether a file shows both as it looks and as its code. */
+export function showsBothWays(entry: Entry) {
+    return entry.kind !== "folder" && extension(entry.name) in rendered
+}
+
 function extension(name: string) {
     const dot = name.lastIndexOf(".")
     return dot > 0 ? name.slice(dot + 1).toLowerCase() : ""
@@ -25,17 +39,23 @@ function extension(name: string) {
 
 type Loaded =
     | Readonly<{ state: "loading" }>
-    | Readonly<{ state: "text", text: string, truncated: boolean }>
+    | Readonly<{ state: "text", text: string, truncated: boolean, url?: string }>
     | Readonly<{ state: "media", url: string, type: string }>
     | Readonly<{ state: "none", reason: string }>
 
-/** One file as it looks: the picture, the sound, the moving image, or the beginning of its text. */
-export default function Preview({ entry }: Readonly<{ entry: Entry }>) {
+/**
+ * One file as it looks: the picture, the sound, the moving image, or the beginning of its text. A
+ * file written as text and read as a page or a picture shows as it looks, or as its code.
+ */
+export default function Preview({ entry, mode }: Readonly<{ entry: Entry, mode: FileMode }>) {
     const loaded = useContent(entry)
+    const form = rendered[extension(entry.name)]
     return <div className="preview">
         <div className="preview-content">
             {loaded.state === "loading" && <Loading name={entry.name} />}
-            {loaded.state === "text" && <Suspense fallback={<Loading name={entry.name} />}><TextView name={entry.name} text={loaded.text} /></Suspense>}
+            {loaded.state === "text" && (form && mode === "preview"
+                ? form === "picture" ? <Media url={loaded.url!} type="image/svg+xml" name={entry.name} /> : <Page text={loaded.text} form={form} name={entry.name} />
+                : <Suspense fallback={<Loading name={entry.name} />}><TextView name={entry.name} text={loaded.text} /></Suspense>)}
             {loaded.state === "media" && <Media url={loaded.url} type={loaded.type} name={entry.name} />}
             {loaded.state === "none" && <div className="preview-none"><FileIcon kind={entry.kind} size={72} /><span>{loaded.reason}</span></div>}
         </div>
@@ -56,6 +76,33 @@ function Media({ url, type, name }: Readonly<{ url: string, type: string, name: 
     return <iframe className="preview-document" src={url} title={name} />
 }
 
+/**
+ * A page or a Markdown document as it reads. It lives in a frame of its own with no origin: a page may
+ * run its scripts there, but reaches nothing of Files or the Desktop; Markdown runs none, and its
+ * links open outside.
+ */
+function Page({ text, form, name }: Readonly<{ text: string, form: "markdown" | "page", name: string }>) {
+    const colors = useThemedValue(useAppearance().colors)
+    const document = useMemo(() => form === "page" ? text : `<!doctype html><meta charset="utf-8"><base target="_blank"><style>
+        :root { color-scheme: light dark; }
+        body { margin: 0 auto; max-width: 46rem; padding: 1.5rem 1.75rem 3rem; color: ${colors.foreground}; background: transparent; font: 0.9375rem/1.65 system-ui, sans-serif; overflow-wrap: anywhere; }
+        h1, h2, h3, h4 { line-height: 1.25; margin: 1.6em 0 0.6em; }
+        h1 { font-size: 1.75rem; } h2 { font-size: 1.375rem; } h3 { font-size: 1.125rem; }
+        body > :first-child { margin-top: 0; }
+        a { color: ${colors.primary}; }
+        code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; }
+        code { padding: 0.1em 0.35em; border-radius: 0.3rem; background: color-mix(in oklab, ${colors.foreground} 8%, transparent); }
+        pre { padding: 0.9rem 1rem; border-radius: 0.5rem; overflow: auto; background: color-mix(in oklab, ${colors.foreground} 6%, transparent); }
+        pre code { padding: 0; background: none; }
+        blockquote { margin: 1em 0; padding: 0 1em; border-inline-start: 3px solid color-mix(in oklab, ${colors.foreground} 20%, transparent); opacity: 0.8; }
+        table { border-collapse: collapse; } th, td { padding: 0.35rem 0.7rem; border: 1px solid color-mix(in oklab, ${colors.foreground} 15%, transparent); }
+        img { max-width: 100%; }
+        hr { border: 0; border-top: 1px solid color-mix(in oklab, ${colors.foreground} 15%, transparent); }
+    </style>${marked.parse(text, { async: false })}`, [text, form, colors])
+    return <iframe className="preview-document" title={name} srcDoc={document}
+        sandbox={form === "page" ? "allow-scripts" : "allow-popups allow-popups-to-escape-sandbox"} />
+}
+
 function useContent(entry: Entry): Loaded {
     const [loaded, setLoaded] = useState<Loaded & { path?: string }>({ state: "loading" })
     useEffect(() => {
@@ -66,6 +113,12 @@ function useContent(entry: Entry): Loaded {
         if (type && (entry.size ?? 0) > mediaLimit) { show({ state: "none", reason: `This file is too large to preview (${formatSize(entry.size)}).` }); return }
         show({ state: "loading" })
         void (async () => {
+            // A file that shows both ways is read as text; a picture among them also gets its address.
+            if (extension(entry.name) in rendered) {
+                const content = await readFile(path, textLimit)
+                if (type) url = URL.createObjectURL(new Blob([content.bytes as Uint8Array<ArrayBuffer>], { type }))
+                return show({ state: "text", text: new TextDecoder().decode(content.bytes), truncated: content.size > content.bytes.length, url })
+            }
             if (type) {
                 const content = await readFile(path)
                 url = URL.createObjectURL(new Blob([content.bytes as Uint8Array<ArrayBuffer>], { type }))

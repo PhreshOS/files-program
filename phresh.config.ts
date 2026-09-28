@@ -19,8 +19,11 @@ export default defineConfig({
         worker: "main.js",
         devCommand: "vite-node server/main.ts"
     },
+    // An ordinary frame, not a sandboxed one: the browser drags between frames of the same origin only,
+    // so entries dragged between Files windows, and files dragged in, need the Desktop's origin.
     client: {
         location: "dist/client",
+        sandbox: false,
         title: "Files",
         size: { width: 960, height: 600 },
         devCommand: "vite --config vite.client.ts"

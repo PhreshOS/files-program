@@ -8,6 +8,15 @@ export type FileContent = Readonly<{ bytes: Uint8Array, size: number, modified: 
 type Shared = Readonly<{ process: Process, server: ServerEndpoint }>
 let shared: Promise<Shared> | undefined
 
+/** What was copied or cut, the same in every Files window. */
+export type Clipboard = Readonly<{ mode: "copy" | "cut", paths: readonly string[] }> | null
+
+/** Who follows what the Server announces: a folder that changed, and the clipboard. */
+const followers = {
+    folder: new Set<(path: string) => void>(),
+    clipboard: new Set<(clipboard: Clipboard) => void>()
+}
+
 /**
  * The one Files Server every window uses. The first window to need it starts it; the others, a
  * second Files window or a file's own window, find it running.
@@ -17,6 +26,8 @@ function server() {
         const program = await context.program()
         const process = await program.findOrCreateProcess({ name: "server", server: true, client: false })
         await process.server.waitReady()
+        process.server.subscribe("folder.changed", payload => { for (const follow of followers.folder) follow((payload as { path: string }).path) })
+        process.server.subscribe("clipboard.changed", payload => { for (const follow of followers.clipboard) follow(payload as Clipboard) })
         return { process, server: process.server }
     })().catch(error => { shared = undefined; throw error })
     return shared
@@ -71,4 +82,67 @@ export async function readFile(path: string, length?: number): Promise<FileConte
     const answer = await ask<{ size: number, modified: number, content: ReadableStream<Uint8Array> }>("file.read", { path, length })
     const bytes = new Uint8Array(await new Response(answer.content).arrayBuffer())
     return { bytes, size: answer.size, modified: answer.modified }
+}
+
+/** Follows the folders that change, from any window or from outside Files. */
+export function followFolders(follow: (path: string) => void) {
+    followers.folder.add(follow)
+    return () => { followers.folder.delete(follow) }
+}
+
+/** Follows the clipboard, from its current state on. */
+export function followClipboard(follow: (clipboard: Clipboard) => void) {
+    followers.clipboard.add(follow)
+    void ask<Clipboard>("clipboard.get").then(clipboard => { if (followers.clipboard.has(follow)) follow(clipboard) })
+    return () => { followers.clipboard.delete(follow) }
+}
+
+/** Copying and moving whole folders can take a while; bringing a file from the device even longer. */
+const long = 30 * 60_000
+
+type Created = Readonly<{ path: string }>
+type Placed = Readonly<{ paths: readonly string[] }>
+
+export function createFolder(parent: string, name?: string) {
+    return ask<Created>("folder.create", { parent, name })
+}
+
+export function createFile(parent: string) {
+    return ask<Created>("file.create", { parent })
+}
+
+export function renameEntry(path: string, name: string) {
+    return ask<Created>("entry.rename", { path, name })
+}
+
+export function copyEntries(paths: readonly string[], destination: string) {
+    return ask<Placed>("entries.copy", { paths, destination }, long)
+}
+
+export function moveEntries(paths: readonly string[], destination: string) {
+    return ask<Placed>("entries.move", { paths, destination }, long)
+}
+
+export function trashEntries(paths: readonly string[]) {
+    return ask("entries.trash", { paths }, long)
+}
+
+/** A new file in a folder, its bytes streamed to the Server as they are read. */
+export function writeFile(folder: string, name: string, content: ReadableStream<Uint8Array>) {
+    return ask<Created>("file.write", { folder, name, content }, long)
+}
+
+export function setClipboard(clipboard: Clipboard) {
+    return ask("clipboard.set", clipboard)
+}
+
+export function paste(destination: string) {
+    return ask<Placed>("clipboard.paste", { destination }, long)
+}
+
+/** A file's bytes as one Blob, streamed from the Server, so a large file need not be held twice. */
+export async function fileBlob(path: string, type = "") {
+    const answer = await ask<{ content: ReadableStream<Uint8Array> }>("file.read", { path }, long)
+    const blob = await new Response(answer.content).blob()
+    return type ? new Blob([blob], { type }) : blob
 }

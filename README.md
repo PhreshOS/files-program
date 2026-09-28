@@ -1,8 +1,14 @@
 # Files
 
-Files browses the folders and files available to the machine running PhreshOS.
-Its Server reads the machine's filesystem; each Client window presents that
-shared view, opens folders, and previews supported files.
+Files browses and manages the folders and files of the machine running
+PhreshOS. Its one Server works on the machine's filesystem; every Client window
+presents it, and each follows the changes the others make.
+
+It creates, renames, duplicates, copies, cuts, pastes, and moves entries to the
+machine's Trash; uploads files and folders from the owner's device and
+downloads files to it; and moves or copies entries by dragging them between
+folders and windows. It shows pictures, sound, video, PDF documents, and text;
+Markdown, HTML, and SVG show either as they look or as their code.
 
 [PhreshOS](https://phreshos.com) ·
 [Documentation](https://phreshos.com/docs) ·

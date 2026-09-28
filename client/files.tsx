@@ -1,12 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, ScrollArea, Surface, useAppearance, usePreferences, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type TableSort } from "@phreshos/react-ui"
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react"
+import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, PanelLeft, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
-import Preview from "./preview"
-import WallpaperDialog, { wallpaperType } from "./wallpaper"
+import Preview, { showsBothWays, type FileMode } from "./preview"
+import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
-import { existing, listFolder } from "./folders"
+import { copyEntries, createFile, createFolder, existing, fileBlob, followClipboard, followFolders, listFolder, paste, renameEntry, setClipboard, trashEntries, type Clipboard } from "./folders"
+import { bring, dragItems, entriesType, fromDataTransfer, fromDropItems, fromFiles, type Incoming } from "./transfer"
 
 type View = "list" | "grid"
 
@@ -44,13 +45,18 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const [selected, setSelected] = useState<readonly string[] | "all">([])
     const [sort, setSort] = useState<TableSort>({ column: "name", direction: "ascending" })
     const [showHidden, setShowHidden] = useState(false)
-    const [wallpaper, setWallpaper] = useState<Entry | null>(null)
+    const [fileMode, setFileMode] = useState<FileMode>("preview")
 
     const places = usePlaces(home)
     // The usual folders keep their marks wherever they appear, in the list as in Favorites.
     const marks = useMemo(() => new Map(placesOf(home).map(item => [item.path, item.mark])), [home])
     const { at } = location
-    const folder = useFolder(at.file ? parentOf(at.path)! : at.path)
+    const folderPath = at.file ? parentOf(at.path)! : at.path
+    const folder = useFolder(folderPath)
+    const clipboard = useClipboard()
+    const [renaming, setRenaming] = useState<string | null>(null)
+    const status = useStatus()
+    const upload = useRef<HTMLInputElement>(null)
     const all = folder.entries
     // Names starting with a dot are hidden, as on every system these files come from.
     const hidden = all.filter(entry => entry.name.startsWith(".")).length
@@ -61,22 +67,21 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     }, [all, query, sort, showHidden])
     const chosen = selected === "all" ? entries : entries.filter(entry => selected.includes(entry.path))
 
+    /** Moving to another place starts it fresh: nothing chosen, nothing searched, nothing to report. */
+    function arrive(next: Location) {
+        setLocation(next)
+        setSelected([]); setQuery(""); setRenaming(null); status.clear()
+    }
     function go(path: string, file: Entry | null = null) {
-        if (path === at.path) return
-        setLocation({ at: { path, file }, back: [...location.back, at], forward: [] })
-        setSelected([]); setQuery("")
+        if (path !== at.path) arrive({ at: { path, file }, back: [...location.back, at], forward: [] })
     }
     function back() {
         const place = location.back.at(-1)
-        if (place === undefined) return
-        setLocation({ at: place, back: location.back.slice(0, -1), forward: [at, ...location.forward] })
-        setSelected([]); setQuery("")
+        if (place !== undefined) arrive({ at: place, back: location.back.slice(0, -1), forward: [at, ...location.forward] })
     }
     function forward() {
         const [place, ...rest] = location.forward
-        if (place === undefined) return
-        setLocation({ at: place, back: [...location.back, at], forward: rest })
-        setSelected([]); setQuery("")
+        if (place !== undefined) arrive({ at: place, back: [...location.back, at], forward: rest })
     }
     /** Opening goes to the entry: a folder shows its entries, a file shows itself. */
     function open(path: string) {
@@ -84,11 +89,81 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         if (entry) go(path, entry.kind === "folder" ? null : entry)
     }
 
-    /** A right-click on an entry outside the selection chooses that entry, so the menu acts on it. */
+    /**
+     * A right-click on an entry outside the selection chooses that entry, so the menu acts on it; one
+     * on the space around the entries chooses none, so the menu acts on the folder.
+     */
     function selectUnder(target: EventTarget) {
         const path = target instanceof Element ? target.closest("[role=row][data-key]")?.getAttribute("data-key") : null
-        if (path && selected !== "all" && !selected.includes(path)) setSelected([path])
+        if (!path) setSelected([])
+        else if (selected !== "all" && !selected.includes(path)) setSelected([path])
     }
+
+    /** Chooses the entries a change made, once the folder shows them. */
+    const select = (paths: readonly string[] | undefined) => { if (paths?.length) setSelected(paths) }
+
+    /** Brings what was dropped or chosen from the device into a folder. */
+    function transfer(incoming: Incoming, into: string, operation: "move" | "copy") {
+        const doing = "paths" in incoming ? operation === "copy" ? "Copying…" : "Moving…" : "Uploading…"
+        void status.run(doing, () => bring(incoming, into, operation)).then(paths => { if (into === folderPath) select(paths) })
+    }
+
+    /** What the menus, the keys, and the buttons ask of the chosen entries, or of the folder when none is. */
+    function run(action: string) {
+        const paths = chosen.map(entry => entry.path)
+        const one = chosen.length === 1 ? chosen[0]! : null
+        const create = (make: typeof createFolder) => void status.run("Creating…", () => make(folderPath)).then(created => {
+            if (created) { select([created.path]); setRenaming(created.path) }
+        })
+        switch (action) {
+            case "open": if (one) open(one.path); break
+            case "window": if (one) void openWindow(one); break
+            case "rename": if (one) setRenaming(one.path); break
+            case "new-folder": create(createFolder); break
+            case "new-file": create(createFile); break
+            case "upload": upload.current?.click(); break
+            case "duplicate": if (paths.length) void status.run("Duplicating…", () => copyEntries(paths, folderPath)).then(done => select(done?.paths)); break
+            case "copy": case "cut": if (paths.length) void status.run(null, () => setClipboard({ mode: action, paths })); break
+            case "paste": if (clipboard) void status.run(clipboard.mode === "cut" ? "Moving…" : "Copying…", () => paste(folderPath)).then(done => select(done?.paths)); break
+            case "trash": if (paths.length) void status.run("Moving to the Trash…", () => trashEntries(paths)).then(() => setSelected([])); break
+            case "download": if (paths.length) void status.run("Preparing the download…", () => download(chosen)); break
+            case "copy-path": void status.run(null, () => navigator.clipboard.writeText((paths.length ? paths : [folderPath]).join("\n"))); break
+        }
+    }
+
+    function finishRename(entry: Entry, name: string | null) {
+        setRenaming(null)
+        if (name !== null && name !== entry.name) void status.run("Renaming…", () => renameEntry(entry.path, name)).then(renamed => select(renamed && [renamed.path]))
+    }
+
+    /**
+     * The keys every file manager knows, anywhere in the window while it shows a folder, except where
+     * text is typed or read, which keeps its own keys.
+     */
+    function shortcut(event: KeyboardEvent) {
+        if (at.file || renaming || (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable=true]"))) return
+        const command = event.metaKey || event.ctrlKey, key = event.key.toLowerCase()
+        const action = command && event.shiftKey && key === "n" ? "new-folder"
+            : command && key === "c" ? "copy" : command && key === "x" ? "cut" : command && key === "v" ? "paste"
+            : command && key === "d" ? "duplicate"
+            : (command && key === "backspace") || key === "delete" ? "trash"
+            : key === "f2" ? "rename" : null
+        if (!action) return
+        event.preventDefault()
+        run(action)
+    }
+
+    const onShortcut = useEffectEvent(shortcut)
+    useEffect(() => {
+        // Before the collection, which keeps the keys it receives to itself.
+        const listen = (event: KeyboardEvent) => onShortcut(event)
+        addEventListener("keydown", listen, true)
+        return () => removeEventListener("keydown", listen, true)
+    }, [])
+
+    const entryDrag = useEntryDrag(entries, folderPath, transfer)
+    const danger = useThemedValue(useAppearance().colors).danger
+    const cut = clipboard?.mode === "cut" ? clipboard.paths : []
 
     const parent = parentOf(at.path)
     const place = places.find(item => item.path === at.path)?.path ?? (at.path === "/" ? "/" : null)
@@ -112,51 +187,76 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                 <Button iconOnly depth="flat" size="small" aria-label="Up" disabled={parent === null} onPress={() => parent && go(parent)}><ArrowUp /></Button>
             </Toolbar>
             <Path path={at.path} home={home} narrow={narrow} marks={marks} onGo={path => go(path)} />
+            <DropdownMenu>
+                <DropdownMenu.Trigger iconOnly depth="flat" size="small" aria-label="New" disabled={at.file !== null}><Plus /></DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                    <Menu aria-label="New" size="small" onAction={action => run(String(action))}><NewItems /></Menu>
+                </DropdownMenu.Content>
+            </DropdownMenu>
             <div className="search"><SearchField aria-label="Search this folder" placeholder="Search" size="small" value={query} onChange={setQuery} disabled={at.file !== null} /></div>
-            <div className="view"><SegmentedControl aria-label="View" size="small" disabled={at.file !== null} value={view} onChange={value => setView(value as View)}>
-                <SegmentedControl.Item id="list" aria-label="List"><List /></SegmentedControl.Item>
-                <SegmentedControl.Item id="grid" aria-label="Icons"><LayoutGrid /></SegmentedControl.Item>
-            </SegmentedControl></div>
+            {/* The view of what the window shows: a folder as a list or as icons; a file that shows both
+                ways as it looks or as its code. */}
+            <div className="view">{at.file && showsBothWays(at.file)
+                ? <SegmentedControl aria-label="Show" size="small" value={fileMode} onChange={value => setFileMode(value as FileMode)}>
+                    <SegmentedControl.Item id="preview" aria-label="Preview"><Eye /></SegmentedControl.Item>
+                    <SegmentedControl.Item id="code" aria-label="Code"><CodeXml /></SegmentedControl.Item>
+                </SegmentedControl>
+                : <SegmentedControl aria-label="View" size="small" disabled={at.file !== null} value={view} onChange={value => setView(value as View)}>
+                    <SegmentedControl.Item id="list" aria-label="List"><List /></SegmentedControl.Item>
+                    <SegmentedControl.Item id="grid" aria-label="Icons"><LayoutGrid /></SegmentedControl.Item>
+                </SegmentedControl>}</div>
         </AppLayout.Header>
         <AppLayout.Content style={{ containerType: "size" }}>
-            {at.file ? <FileView file={at.file} /> : <ContextMenu>
+            {at.file ? <FileView file={at.file} mode={fileMode} /> : <ContextMenu>
                 <ContextMenu.Trigger>
-                    <div className="entries" onContextMenuCapture={event => selectUnder(event.target)}>
+                    <div className={`entries${entryDrag.around ? " drop-target" : ""}`} style={entryDrag.style} onContextMenuCapture={event => selectUnder(event.target)}
+                        onDragOverCapture={entryDrag.over} onDragLeave={entryDrag.leave} onDropCapture={entryDrag.drop}>
                         {view === "list"
-                            ? <ListView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} sort={sort} onSort={setSort} onOpen={open} query={query} marks={marks} />
-                            : <GridView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} onOpen={open} query={query} marks={marks} />}
+                            ? <ListView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} sort={sort} onSort={setSort} onOpen={open} query={query} marks={marks} dragAndDropHooks={entryDrag.hooks} renaming={renaming} onRename={finishRename} cut={cut} />
+                            : <GridView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} onOpen={open} query={query} marks={marks} dragAndDropHooks={entryDrag.hooks} renaming={renaming} onRename={finishRename} cut={cut} />}
                     </div>
                 </ContextMenu.Trigger>
                 <ContextMenu.Content>
-                    <Menu aria-label="Entries" size="small" onAction={action => {
-                        if (chosen.length !== 1) return
-                        if (action === "open") open(chosen[0]!.path)
-                        if (action === "window") void openWindow(chosen[0]!)
-                        if (action === "wallpaper") setWallpaper(chosen[0]!)
-                    }}>
-                        <Menu.Item id="open" disabled={chosen.length !== 1}><FolderOpen />Open</Menu.Item>
-                        <Menu.Item id="window" disabled={chosen.length !== 1}><SquareArrowOutUpRight />Open in new window</Menu.Item>
-                        {chosen.length === 1 && wallpaperType(chosen[0]!) && <Menu.Item id="wallpaper"><Wallpaper />Set as wallpaper…</Menu.Item>}
-                        <Menu.Separator />
-                        <Menu.Item id="new-folder" disabled><FolderPlus />New folder</Menu.Item>
-                        <Menu.Item id="rename" disabled><PencilLine />Rename</Menu.Item>
-                        <Menu.Item id="copy" disabled><Copy />Copy</Menu.Item>
-                        <Menu.Item id="cut" disabled><Scissors />Cut</Menu.Item>
-                        <Menu.Item id="paste" disabled><ClipboardPaste />Paste</Menu.Item>
-                        <Menu.Separator />
-                        <Menu.Item id="delete" color="danger" disabled><Trash2 />Delete</Menu.Item>
-                    </Menu>
+                    {chosen.length
+                        ? <Menu aria-label="Entries" size="small" onAction={action => run(String(action))}>
+                            <Menu.Item id="open" disabled={chosen.length !== 1}><FolderOpen />Open</Menu.Item>
+                            <Menu.Item id="window" disabled={chosen.length !== 1}><SquareArrowOutUpRight />Open in new window</Menu.Item>
+                            {chosen.length === 1 && wallpaperType(chosen[0]!) && <WallpaperSubmenu entry={chosen[0]!} />}
+                            <Menu.Separator />
+                            <Menu.Item id="rename" disabled={chosen.length !== 1}><PencilLine />Rename</Menu.Item>
+                            <Menu.Item id="duplicate"><CopyPlus />Duplicate</Menu.Item>
+                            <Menu.Item id="copy"><Copy />Copy</Menu.Item>
+                            <Menu.Item id="cut"><Scissors />Cut</Menu.Item>
+                            <Menu.Separator />
+                            <Menu.Item id="download" disabled={chosen.some(entry => entry.kind === "folder")}><Download />Download</Menu.Item>
+                            <Menu.Item id="copy-path"><Link />Copy path</Menu.Item>
+                            <Menu.Separator />
+                            <Menu.Item id="trash" color="danger"><Trash2 />Move to Trash</Menu.Item>
+                        </Menu>
+                        : <Menu aria-label="This folder" size="small" onAction={action => run(String(action))}>
+                            <NewItems />
+                            <Menu.Separator />
+                            <Menu.Item id="paste" disabled={!clipboard}><ClipboardPaste />Paste</Menu.Item>
+                            <Menu.Item id="copy-path"><Link />Copy path</Menu.Item>
+                        </Menu>}
                 </ContextMenu.Content>
             </ContextMenu>}
+            <input ref={upload} type="file" multiple hidden onChange={event => {
+                const files = [...event.target.files ?? []]
+                event.target.value = ""
+                if (files.length) transfer(fromFiles(files), folderPath, "copy")
+            }} />
         </AppLayout.Content>
         {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)}>{placesNav}</Drawer>}
-        <WallpaperDialog entry={wallpaper} onClose={() => setWallpaper(null)} />
         <AppLayout.Footer style={{ paddingInline: "0.75rem 0.375rem", paddingTop: "0.625rem" }}>
             {at.file ? <>
-            {wallpaperType(at.file) && <Button depth="none" size="xsmall" onPress={() => setWallpaper(at.file)}><Wallpaper />Set as wallpaper…</Button>}
+            {wallpaperType(at.file) && <DropdownMenu>
+                <DropdownMenu.Trigger depth="none" size="xsmall"><Wallpaper />Set as wallpaper<ChevronDown /></DropdownMenu.Trigger>
+                <DropdownMenu.Content><WallpaperMenu entry={at.file} /></DropdownMenu.Content>
+            </DropdownMenu>}
             <Button depth="none" size="xsmall" onPress={() => void openWindow(at.file!)}><SquareArrowOutUpRight />Open in new window</Button>
             </> : <>
-            <span className="status">{summary(entries, chosen)}</span>
+            <span className={`status${status.current?.problem ? " problem" : ""}`} role="status" style={status.current?.problem ? { color: danger } : undefined}>{status.current?.text ?? summary(entries, chosen)}</span>
             {hidden > 0 && <Button depth="none" size="xsmall" onPress={() => setShowHidden(!showHidden)}>
                 {showHidden ? `Hide ${hidden} hidden` : `Show ${hidden} hidden`}
             </Button>}
@@ -207,19 +307,29 @@ type CollectionProps = Readonly<{
     query: string
     problem: string | null
     loading: boolean
+    dragAndDropHooks: DragAndDropHooks
+    /** The entry whose name is being changed in place. */
+    renaming: string | null
+    onRename: (entry: Entry, name: string | null) => void
+    /** Entries cut to be pasted elsewhere, shown faded until then. */
+    cut: readonly string[]
 }>
 
-function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, query, problem, loading }: CollectionProps & Readonly<{ sort: TableSort, onSort: (sort: TableSort) => void }>) {
-    return <ScrollArea axis="horizontal"><div className="list-columns"><Table aria-label="Entries" size="small" selectionMode="multiple" value={selected} onChange={onSelect} onAction={onOpen} sort={sort} onSortChange={onSort}>
+// As in every file manager, a press chooses one entry, with Command or Shift it adds more, and a
+// double press opens it.
+function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps & Readonly<{ sort: TableSort, onSort: (sort: TableSort) => void }>) {
+    return <ScrollArea axis="horizontal"><div className="list-columns"><Table aria-label="Entries" size="small" selectionMode="multiple" selectionBehavior="replace" value={selected} onChange={onSelect} onAction={onOpen} sort={sort} onSortChange={onSort} dragAndDropHooks={dragAndDropHooks}>
         <Table.Header>
             <Table.Column id="name" rowHeader sortable>Name</Table.Column>
             <Table.Column id="modified" sortable>Modified</Table.Column>
             <Table.Column id="size" sortable>Size</Table.Column>
             <Table.Column id="kind" sortable>Kind</Table.Column>
         </Table.Header>
-        <Table.Body items={entries.map(entry => ({ ...entry, id: entry.path }))} renderEmptyState={() => <Empty query={query} problem={problem} loading={loading} />}>
-            {entry => <Table.Row id={entry.path}>
-                <Table.Cell><span className="name"><FileIcon kind={entry.kind} mark={marks.get(entry.path)} />{entry.name}</span></Table.Cell>
+        <Table.Body items={entries.map(entry => ({ ...entry, id: entry.path }))} dependencies={[renaming, cut, marks]} renderEmptyState={() => <Empty query={query} problem={problem} loading={loading} />}>
+            {entry => <Table.Row id={entry.path} textValue={entry.name}>
+                <Table.Cell><span className={`name${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} />
+                    {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : entry.name}
+                </span></Table.Cell>
                 <Table.Cell><span className="quiet">{formatModified(entry.modified)}</span></Table.Cell>
                 <Table.Cell><span className="quiet numeric">{formatSize(entry.size)}</span></Table.Cell>
                 <Table.Cell><span className="quiet">{kindNames[entry.kind]}</span></Table.Cell>
@@ -228,13 +338,47 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
     </Table></div></ScrollArea>
 }
 
-function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading }: CollectionProps) {
+function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps) {
     if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
-    return <GridList aria-label="Entries" selectionMode="multiple" itemWidth="6.5rem" value={selected} onChange={onSelect} onAction={key => onOpen(String(key))}>
+    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" itemWidth="6.5rem" value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
         {entries.map(entry => <GridList.Item key={entry.path} id={entry.path} textValue={entry.name}>
-            <span className="tile"><FileIcon kind={entry.kind} mark={marks.get(entry.path)} size={48} /><span className="tile-name">{entry.name}</span></span>
+            <span className={`tile${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} size={48} />
+                {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : <span className="tile-name">{entry.name}</span>}
+            </span>
         </GridList.Item>)}
     </GridList>
+}
+
+/**
+ * A new name typed in place of the old one. It starts with the name chosen up to its extension, which
+ * is usually kept; Enter or leaving the field keeps the new name, Escape keeps the old one. Its keys
+ * and presses stay in the field, away from the collection around it.
+ */
+function RenameField({ entry, onDone }: Readonly<{ entry: Entry, onDone: (name: string | null) => void }>) {
+    const input = useRef<HTMLInputElement>(null)
+    const [name, setName] = useState(entry.name)
+    const finished = useRef(false)
+    const finish = (value: string | null) => { if (!finished.current) { finished.current = true; onDone(value) } }
+    useLayoutEffect(() => {
+        const field = input.current
+        if (!field) return
+        const dot = entry.kind === "folder" ? -1 : entry.name.lastIndexOf(".")
+        field.focus()
+        field.setSelectionRange(0, dot > 0 ? dot : entry.name.length)
+    }, [entry])
+    return <span className="rename" onKeyDown={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+        <Input ref={input} aria-label={`New name for ${entry.name}`} size="xsmall" value={name} onChange={setName} onBlur={() => finish(name.trim() ? name : null)}
+            onKeyDown={event => { if (event.key === "Enter") finish(name.trim() ? name : null); else if (event.key === "Escape") finish(null) }} />
+    </span>
+}
+
+/** What can be made in a folder, in the menus that make it. */
+function NewItems() {
+    return <>
+        <Menu.Item id="new-folder"><FolderPlus />New folder</Menu.Item>
+        <Menu.Item id="new-file"><FilePlus />New text file</Menu.Item>
+        <Menu.Item id="upload"><Upload />Upload files…</Menu.Item>
+    </>
 }
 
 function Empty({ query, problem, loading }: Readonly<{ query: string, problem: string | null, loading: boolean }>) {
@@ -252,9 +396,11 @@ function summary(entries: readonly Entry[], chosen: readonly Entry[]) {
 
 type Folder = Readonly<{ path: string, entries: readonly Entry[], problem: string | null, loading?: boolean }>
 
-/** One folder's entries as the machine has them. */
+/** One folder's entries as the machine has them, listed again whenever the folder changes. */
 function useFolder(path: string): Folder {
     const [folder, setFolder] = useState<Folder>({ path, entries: [], problem: null })
+    const [version, setVersion] = useState(0)
+    useEffect(() => followFolders(changed => { if (changed === path) setVersion(value => value + 1) }), [path])
     useEffect(() => {
         let current = true
         listFolder(path).then(
@@ -262,16 +408,125 @@ function useFolder(path: string): Folder {
             error => current && setFolder({ path, entries: [], problem: problemOf(error) })
         )
         return () => { current = false }
-    }, [path])
-    // Until the new folder arrives, it shows nothing of the one before.
+    }, [path, version])
+    // Until the new folder arrives, it shows nothing of the one before; the same folder listed again
+    // keeps showing until the new list replaces it.
     return folder.path === path ? folder : { path, entries: [], problem: null, loading: true }
 }
 
-function problemOf(error: unknown) {
+/** What was copied or cut, in any Files window. */
+function useClipboard() {
+    const [clipboard, setClipboard] = useState<Clipboard>(null)
+    useEffect(() => followClipboard(setClipboard), [])
+    return clipboard
+}
+
+type Status = Readonly<{ text: string, problem: boolean }>
+
+/**
+ * What the footer reports about a change: what it is doing, once it takes long enough to notice, and
+ * why it failed. Files reports in its own footer; the System will have its own way to notify.
+ */
+function useStatus() {
+    const [current, setCurrent] = useState<Status | null>(null)
+    const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+    const show = (next: Status | null, after = 0) => {
+        clearTimeout(timer.current)
+        if (after) timer.current = setTimeout(() => setCurrent(next), after)
+        else setCurrent(next)
+    }
+    return {
+        current,
+        clear: () => show(null),
+        /** Runs one change; it answers undefined when the change failed, after reporting why. */
+        async run<Result>(doing: string | null, change: () => Promise<Result>): Promise<Result | undefined> {
+            show(doing === null ? null : { text: doing, problem: false }, doing === null ? 0 : 400)
+            try {
+                const result = await change()
+                show(null)
+                return result
+            }
+            catch (error) {
+                show({ text: problemOf(error, "Files could not do this."), problem: true })
+                timer.current = setTimeout(() => setCurrent(null), 10_000)
+                return undefined
+            }
+        }
+    }
+}
+
+/**
+ * Dragging entries: out of the collection, to another folder in it or in another Files window, and
+ * into it from there or from the owner's device. The collection takes drops on its folders and on
+ * itself; the space around it takes drops for the folder it shows. A drag moves entries, or copies
+ * them with the copy key held, Option on a Mac and Control elsewhere; files from a device are copied.
+ */
+function useEntryDrag(entries: readonly Entry[], folder: string, transfer: (incoming: Incoming, into: string, operation: "move" | "copy") => void) {
+    const folders = new Set(entries.filter(entry => entry.kind === "folder").map(entry => entry.path))
+    const drop = async (items: readonly DropItem[], into: string, operation: DropOperation) => {
+        const incoming = await fromDropItems(items)
+        if (incoming) transfer(incoming, into, operation === "copy" ? "copy" : "move")
+    }
+    const { dragAndDropHooks } = useDragAndDrop({
+        getItems: keys => dragItems([...keys].map(String)),
+        getAllowedDropOperations: () => ["move", "copy"],
+        shouldAcceptItemDrop: target => folders.has(String(target.key)),
+        getDropOperation: (target, types, allowed) => {
+            if (target.type === "item" && !folders.has(String(target.key))) return "cancel"
+            return types.has(entriesType) ? allowed[0] ?? "cancel" : "copy"
+        },
+        onItemDrop: event => void drop(event.items, String(event.target.key), event.dropOperation),
+        onRootDrop: event => void drop(event.items, folder, event.dropOperation)
+    })
+
+    const [around, setAround] = useState(false)
+    const outside = (event: DragEvent) => !(event.target instanceof Element && event.target.closest("table, [role=grid]"))
+    const accepts = (event: DragEvent) => event.dataTransfer.types.includes(entriesType) || event.dataTransfer.types.includes("Files")
+    const copying = (event: DragEvent) => !event.dataTransfer.types.includes(entriesType) || (/Mac/.test(navigator.platform) ? event.altKey : event.ctrlKey)
+    const colors = useThemedValue(useAppearance().colors)
+
+    return {
+        hooks: dragAndDropHooks,
+        around,
+        style: around ? { outline: `3px solid color-mix(in oklab, ${colors.primary} 34%, transparent)`, outlineOffset: -3 } : undefined,
+        over(event: DragEvent) {
+            const takes = outside(event) && accepts(event)
+            setAround(takes)
+            if (!takes) return
+            event.preventDefault()
+            event.dataTransfer.dropEffect = copying(event) ? "copy" : "move"
+        },
+        leave(event: DragEvent) {
+            if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) setAround(false)
+        },
+        drop(event: DragEvent) {
+            setAround(false)
+            if (!outside(event)) return
+            const incoming = fromDataTransfer(event.dataTransfer)
+            if (!incoming) return
+            event.preventDefault()
+            transfer(incoming, folder, copying(event) ? "copy" : "move")
+        }
+    }
+}
+
+/** Saves files to the owner's device, each streamed whole from the Server first. */
+async function download(files: readonly Entry[]) {
+    for (const file of files) {
+        const url = URL.createObjectURL(await fileBlob(file.path))
+        Object.assign(document.createElement("a"), { href: url, download: file.name }).click()
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+}
+
+/** Why something failed, in words: the machine's reasons by their codes, Files' own as they are. */
+function problemOf(error: unknown, failed = "Files could not open this folder.") {
     const message = error instanceof Error ? error.message : String(error)
-    if (/EACCES|EPERM|permission/i.test(message)) return "Files cannot open this folder: the machine does not allow it."
-    if (/ENOENT|not exist/i.test(message)) return "This folder no longer exists."
-    return `Files could not open this folder. ${message}`
+    if (/EACCES|EPERM|permission/i.test(message)) return `${failed} The machine does not allow it.`
+    if (/ENOENT|not exist/i.test(message)) return `${failed} It no longer exists.`
+    if (/ENOSPC/.test(message)) return `${failed} The disk is full.`
+    if (/^E[A-Z]+:/.test(message)) return `${failed} ${message}`
+    return message
 }
 
 /** The usual folders of a home, those this machine has. */
@@ -296,7 +551,7 @@ async function openWindow(entry: Entry) {
  * height, so the file never scrolls away. Around the file it keeps the same space as between the file
  * and its line of details, instead of the content's wider padding.
  */
-function FileView({ file }: Readonly<{ file: Entry }>) {
+function FileView({ file, mode }: Readonly<{ file: Entry, mode: FileMode }>) {
     const ref = useRef<HTMLDivElement>(null)
     const [padding, setPadding] = useState(0)
     useLayoutEffect(() => {
@@ -304,7 +559,7 @@ function FileView({ file }: Readonly<{ file: Entry }>) {
         if (parent) setPadding(parseFloat(getComputedStyle(parent).paddingTop))
     }, [])
     return <div ref={ref} className="file-view" style={{ margin: `calc(var(--file-gap) - ${padding}px)`, height: "calc(100cqh - 2 * var(--file-gap))" }}>
-        <Preview entry={file} />
+        <Preview entry={file} mode={mode} />
     </div>
 }
 

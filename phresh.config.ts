@@ -4,6 +4,7 @@ export default defineConfig({
     identity: "files",
     name: "Files",
     description: "Browse and manage the files on your machine.",
+    website: "https://github.com/PhreshOS/files-program",
     version: "0.1.0",
     categories: ["System"],
     keywords: ["files", "folders", "explorer"],

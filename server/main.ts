@@ -16,12 +16,8 @@ context.answer("entry.get", ({ payload }) => entryAt(z.object({ path: absolutePa
 /** Which of the given folders exist, such as the usual folders of a home. */
 context.answer("folders.existing", ({ payload }) => existingFolders(z.object({ paths: z.array(absolutePath).max(100) }).parse(payload).paths))
 
-/**
- * Some of a file's bytes, with its size and time. One answer carries at most a few megabytes, so a
- * large file travels as several answers and never holds the connection for long.
- */
-const pieceLimit = 4 * 1024 * 1024
+/** A file's size and time, and its bytes as a stream: all of them, or from `offset`, at most `length`. */
 context.answer("file.read", ({ payload }) => {
-    const request = z.object({ path: absolutePath, offset: z.number().int().nonnegative().default(0), length: z.number().int().nonnegative().max(pieceLimit) }).parse(payload)
+    const request = z.object({ path: absolutePath, offset: z.number().int().nonnegative().default(0), length: z.number().int().nonnegative().optional() }).parse(payload)
     return readFile(request.path, request.offset, request.length)
 })

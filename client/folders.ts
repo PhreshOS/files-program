@@ -66,22 +66,9 @@ export function existing(paths: readonly string[]) {
     return ask<string[]>("folders.existing", { paths })
 }
 
-/** How much of a file one answer carries. */
-const piece = 4 * 1024 * 1024
-
-/** A file's bytes, or its first `length` bytes, read piece by piece. */
-export async function readFile(path: string, length = Number.POSITIVE_INFINITY): Promise<FileContent> {
-    const first = await ask<FileContent>("file.read", { path, offset: 0, length: Math.min(length, piece) }, 60_000)
-    const total = Math.min(length, first.size)
-    if (first.bytes.length >= total) return first
-    const bytes = new Uint8Array(total)
-    bytes.set(first.bytes)
-    let read = first.bytes.length
-    while (read < total) {
-        const next = await ask<FileContent>("file.read", { path, offset: read, length: Math.min(piece, total - read) }, 60_000)
-        if (!next.bytes.length) break
-        bytes.set(next.bytes, read)
-        read += next.bytes.length
-    }
-    return { bytes: bytes.subarray(0, read), size: first.size, modified: first.modified }
+/** A file's bytes, or its first `length` bytes, streamed from the Server. */
+export async function readFile(path: string, length?: number): Promise<FileContent> {
+    const answer = await ask<{ size: number, modified: number, content: ReadableStream<Uint8Array> }>("file.read", { path, length })
+    const bytes = new Uint8Array(await new Response(answer.content).arrayBuffer())
+    return { bytes, size: answer.size, modified: answer.modified }
 }

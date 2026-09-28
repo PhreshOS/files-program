@@ -1,4 +1,6 @@
-import { lstat, open, readdir, stat } from "node:fs/promises"
+import { createReadStream } from "node:fs"
+import { lstat, readdir, stat } from "node:fs/promises"
+import { Readable } from "node:stream"
 import { homedir } from "node:os"
 import { basename, join } from "node:path"
 
@@ -49,22 +51,14 @@ export async function existingFolders(paths: readonly string[]) {
     return paths.filter((_, index) => found[index])
 }
 
-/** Some of a file's bytes, from `offset`, at most `length` of them, with its size and time. */
-export async function readFile(path: string, offset: number, length: number) {
-    const file = await open(path, "r")
-    try {
-        const details = await file.stat()
-        if (details.isDirectory()) throw new Error(`EISDIR: ${path} is a folder`)
-        const bytes = new Uint8Array(Math.max(0, Math.min(details.size - offset, length)))
-        let read = 0
-        while (read < bytes.length) {
-            const { bytesRead } = await file.read(bytes, read, bytes.length - read, offset + read)
-            if (bytesRead === 0) break
-            read += bytesRead
-        }
-        return { bytes: bytes.subarray(0, read), size: details.size, modified: details.mtimeMs }
-    }
-    finally {
-        await file.close()
-    }
+/**
+ * A file's size and time, and its bytes as a stream: all of them, or from `offset`, at most `length`.
+ * The bytes are read only as the reader asks for them, however large the file.
+ */
+export async function readFile(path: string, offset = 0, length?: number) {
+    const details = await stat(path)
+    if (details.isDirectory()) throw new Error(`EISDIR: ${path} is a folder`)
+    const end = length === undefined ? undefined : offset + length - 1
+    const content = length === 0 ? new ReadableStream<Uint8Array>({ start: controller => controller.close() }) : Readable.toWeb(createReadStream(path, { start: offset, end })) as ReadableStream<Uint8Array>
+    return { size: details.size, modified: details.mtimeMs, content }
 }

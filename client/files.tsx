@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
@@ -162,6 +162,9 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     }, [])
 
     const entryDrag = useEntryDrag(entries, folderPath, transfer)
+    // The entries cover the whole content, its padding too, so the space around them takes a
+    // right-click for the folder's menu and a drop into the folder.
+    const [entriesRef, contentPadding] = useContentPadding()
     const danger = useThemedValue(useAppearance().colors).danger
     const cut = clipboard?.mode === "cut" ? clipboard.paths : []
 
@@ -209,7 +212,12 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         <AppLayout.Content style={{ containerType: "size" }}>
             {at.file ? <FileView file={at.file} mode={fileMode} /> : <ContextMenu>
                 <ContextMenu.Trigger>
-                    <div className={`entries${entryDrag.around ? " drop-target" : ""}`} style={entryDrag.style} onContextMenuCapture={event => selectUnder(event.target)}
+                    <div ref={entriesRef} className={`entries${entryDrag.around ? " drop-target" : ""}`}
+                        style={{
+                            margin: `${-contentPadding.top}px ${-contentPadding.right}px ${-contentPadding.bottom}px ${-contentPadding.left}px`,
+                            padding: `${contentPadding.top}px ${contentPadding.right}px ${contentPadding.bottom}px ${contentPadding.left}px`,
+                            minHeight: "100cqh", ...entryDrag.style
+                        }} onContextMenuCapture={event => selectUnder(event.target)}
                         onDragOverCapture={entryDrag.over} onDragLeave={entryDrag.leave} onDropCapture={entryDrag.drop}>
                         {view === "list"
                             ? <ListView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} sort={sort} onSort={setSort} onOpen={open} query={query} marks={marks} dragAndDropHooks={entryDrag.hooks} renaming={renaming} onRename={finishRename} cut={cut} />
@@ -340,7 +348,7 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
 
 function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps) {
     if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
-    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" itemWidth="6.5rem" value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
+    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" itemWidth="6.5rem" style={{ alignContent: "start" }} value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
         {entries.map(entry => <GridList.Item key={entry.path} id={entry.path} textValue={entry.name}>
             <span className={`tile${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} size={48} />
                 {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : <span className="tile-name">{entry.name}</span>}
@@ -552,15 +560,28 @@ async function openWindow(entry: Entry) {
  * and its line of details, instead of the content's wider padding.
  */
 function FileView({ file, mode }: Readonly<{ file: Entry, mode: FileMode }>) {
-    const ref = useRef<HTMLDivElement>(null)
-    const [padding, setPadding] = useState(0)
-    useLayoutEffect(() => {
-        const parent = ref.current?.parentElement
-        if (parent) setPadding(parseFloat(getComputedStyle(parent).paddingTop))
-    }, [])
-    return <div ref={ref} className="file-view" style={{ margin: `calc(var(--file-gap) - ${padding}px)`, height: "calc(100cqh - 2 * var(--file-gap))" }}>
+    const [ref, padding] = useContentPadding()
+    return <div ref={ref} className="file-view" style={{ margin: `calc(var(--file-gap) - ${padding.top}px)`, height: "calc(100cqh - 2 * var(--file-gap))" }}>
         <Preview entry={file} mode={mode} />
     </div>
+}
+
+/**
+ * The padding the content keeps around what it holds, for an element that covers the whole content
+ * instead: the space around the entries takes presses and drops too, and a file sets its own space.
+ */
+function useContentPadding() {
+    const [padding, setPadding] = useState({ top: 0, right: 0, bottom: 0, left: 0 })
+    // Measured whenever the element appears, such as when a file gives way to its folder again.
+    const ref = useCallback((element: HTMLDivElement | null) => {
+        if (!element?.parentElement) return
+        const style = getComputedStyle(element.parentElement)
+        const next = { top: parseFloat(style.paddingTop), right: parseFloat(style.paddingRight), bottom: parseFloat(style.paddingBottom), left: parseFloat(style.paddingLeft) }
+        // A ref may be called again on every render, such as through a trigger that merges refs: only
+        // a changed padding is news.
+        setPadding(current => current.top === next.top && current.right === next.right && current.bottom === next.bottom && current.left === next.left ? current : next)
+    }, [])
+    return [ref, padding] as const
 }
 
 function Places({ places, place, onChoose }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void }>) {

@@ -81,10 +81,11 @@ body,
 header [role="toolbar"],
 .view { flex: none; }
 
+/* The entries fill the content, and what they hold fills them: the list's sideways scrolling, its
+   presses, and its drops reach the empty space below the last entry too. */
 .entries {
-    min-height: 100%;
+    box-sizing: border-box;
     display: grid;
-    align-content: start;
 }
 
 .name {

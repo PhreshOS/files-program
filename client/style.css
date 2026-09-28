@@ -1,0 +1,298 @@
+:root {
+    background: transparent;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body,
+#files {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+.opening {
+    width: min(22rem, calc(100% - 2rem));
+    height: 100%;
+    margin-inline: auto;
+    display: grid;
+    place-items: center;
+}
+
+.file-icon { flex: none; }
+
+/* Places: two quiet groups, each under a small heading. */
+.places { display: grid; gap: 0.25rem; }
+
+.places-heading {
+    margin-block: 0.75rem 0.125rem;
+    padding-inline: 0.5rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    opacity: 0.55;
+}
+
+.places-heading:first-child { margin-top: 0.25rem; }
+
+/* The header: the path takes the room left between the way back and the search. When it runs short,
+   the names shorten, the folders above before the current one; a narrow window keeps only the
+   current one, with the folders above in a menu. */
+.path {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* A step never gets narrower than its shortened name and its separator. */
+.path li { flex: 0 3 auto; }
+.path li:last-child { flex-shrink: 1; }
+.path li > svg { flex: none; }
+
+.path li > :not(svg) {
+    display: block;
+    min-width: 1.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-current {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
+/* The list keeps room for its columns and scrolls sideways when the window is narrower. */
+.list-columns { min-width: 34rem; }
+
+/* Search gives up room before the controls do; the controls never shrink. */
+.search { flex: 0 1 12rem; min-width: 7rem; }
+
+header [role="toolbar"],
+.view { flex: none; }
+
+.entries {
+    min-height: 100%;
+    display: grid;
+    align-content: start;
+}
+
+.name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.quiet { opacity: 0.62; white-space: nowrap; }
+.numeric { font-variant-numeric: tabular-nums; }
+
+.tile {
+    display: grid;
+    justify-items: center;
+    gap: 0.375rem;
+    padding-block: 0.375rem 0.25rem;
+    text-align: center;
+}
+
+.tile-name {
+    max-width: 100%;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.empty {
+    padding: 3rem 1rem;
+    text-align: center;
+    opacity: 0.55;
+}
+
+.empty.loading {
+    width: min(14rem, 60%);
+    margin-inline: auto;
+    opacity: 0;
+    animation: appear 0.2s ease-out 0.25s forwards;
+}
+
+@keyframes appear { to { opacity: 0.8; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .empty.loading { animation-duration: 0s; }
+}
+
+.status {
+    font-size: 0.75rem;
+    opacity: 0.62;
+    font-variant-numeric: tabular-nums;
+}
+
+.spacer { flex: 1 1 auto; }
+
+/* The preview: the file fills what is left above one quiet line of details. */
+.preview {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--file-gap);
+}
+
+.preview-content {
+    position: relative;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 0.5rem;
+}
+
+/* A picture or a moving image fills the room it has, keeping its proportions: its longer side, relative
+   to the room, reaches the edges, and the other side follows. */
+.preview-media {
+    /* The double-click that opened the file must not leave it selected. */
+    user-select: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.preview-document {
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+/* The text view fills the room; CodeMirror scrolls inside it. */
+.text-view {
+    align-self: stretch;
+    justify-self: stretch;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.preview-none,
+.preview-loading {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    width: min(16rem, 80%);
+    text-align: center;
+    opacity: 0.7;
+}
+
+.preview-details {
+    display: flex;
+    gap: 1rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    opacity: 0.62;
+    white-space: nowrap;
+}
+
+.preview-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* A long path gives up its beginning, so the file's name stays. */
+    direction: rtl;
+    text-align: left;
+}
+
+/* A file shown in the content, in place of a folder's entries. One space sets the file apart from
+   the content's edges and from its line of details. */
+:root { --file-gap: 0.625rem; }
+
+.file-view { min-height: 12rem; }
+
+
+/* The places, drawn over the files from the side in a narrow window. */
+.drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+}
+
+/* It slides in from beyond its side and back out the same way, timed by the Appearance transaction
+   set where it is drawn. Only its position moves: fading it would switch off the blur it draws of
+   what is behind it. */
+.drawer.drawer-opening { animation-name: drawer-open; }
+.drawer.drawer-closing { animation-name: drawer-close; animation-fill-mode: forwards; }
+[dir="rtl"] .drawer.drawer-opening { animation-name: drawer-open-rtl; }
+[dir="rtl"] .drawer.drawer-closing { animation-name: drawer-close-rtl; }
+
+@keyframes drawer-open { from { transform: translateX(calc(-100% - 1rem)); } }
+@keyframes drawer-open-rtl { from { transform: translateX(calc(100% + 1rem)); } }
+@keyframes drawer-close { to { transform: translateX(calc(-100% - 1rem)); } }
+@keyframes drawer-close-rtl { to { transform: translateX(calc(100% + 1rem)); } }
+
+.drawer {
+    position: fixed;
+    inset-block: 0.5rem;
+    inset-inline-start: 0.5rem;
+    z-index: 11;
+    width: min(15rem, calc(100% - 3rem));
+    padding: 0.5rem;
+    overflow: auto;
+}
+
+.drawer-title {
+    padding: 0.375rem 0.5rem 0.75rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .search { flex-basis: 8rem; }
+}
+
+/* Set as wallpaper: each card shows the file as that screen would, on that theme's background. */
+.wallpaper-card {
+    display: grid;
+    gap: 0.375rem;
+    justify-items: center;
+    font-size: 0.8125rem;
+}
+
+.wallpaper-frame {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-radius: 0.375rem;
+}
+
+.wallpaper-frame img,
+.wallpaper-frame video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.wallpaper-page { font-size: 0.75rem; opacity: 0.6; }
+
+.wallpaper-loading { padding: 2rem 1rem; }
+
+.wallpaper-problem {
+    margin: 0.75rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--wallpaper-problem, inherit);
+    opacity: 0.8;
+}

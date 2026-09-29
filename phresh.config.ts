@@ -8,6 +8,8 @@ export default defineConfig({
     version: "0.1.0",
     categories: ["System"],
     keywords: ["files", "folders", "explorer"],
+    // Drawn from icon.svg: the apricot pocket holding two green leaves, the folder Files shows inside.
+    icon: "icon.png",
     // Setting a file as the wallpaper uploads it and changes the Appearance.
     permissions: { uploads: true, appearance: true },
     buildCommand: "vite-node scripts/build.ts",

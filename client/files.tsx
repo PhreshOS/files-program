@@ -6,6 +6,7 @@ import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
+import { useFirstArrival } from "./readiness"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
 import { openSettings } from "./settings"
@@ -55,6 +56,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const { at } = location
     const folderPath = at.file ? parentOf(at.path)! : at.path
     const folder = useFolder(folderPath)
+    useFirstArrival(!folder.loading)
     const clipboard = useClipboard()
     const [renaming, setRenaming] = useState<string | null>(null)
     const status = useStatus()
@@ -421,7 +423,7 @@ type Folder = Readonly<{ path: string, entries: readonly Entry[], problem: strin
 
 /** One folder's entries as the machine has them, listed again whenever the folder changes. */
 function useFolder(path: string): Folder {
-    const [folder, setFolder] = useState<Folder>({ path, entries: [], problem: null })
+    const [folder, setFolder] = useState<Folder>({ path, entries: [], problem: null, loading: true })
     const [version, setVersion] = useState(0)
     useEffect(() => followFolders(changed => { if (changed === path) setVersion(value => value + 1) }), [path])
     useEffect(() => {
@@ -439,9 +441,10 @@ function useFolder(path: string): Folder {
 
 /** What was copied or cut, in any Files window. */
 function useClipboard() {
-    const [clipboard, setClipboard] = useState<Clipboard>(null)
+    const [clipboard, setClipboard] = useState<Clipboard | undefined>(undefined)
     useEffect(() => followClipboard(setClipboard), [])
-    return clipboard
+    useFirstArrival(clipboard !== undefined)
+    return clipboard ?? null
 }
 
 type Status = Readonly<{ text: string, problem: boolean }>
@@ -549,9 +552,10 @@ function problemOf(error: unknown, failed = "Files could not open this folder.")
 /** The usual folders of a home, those this machine has. */
 function usePlaces(home: string) {
     const all = useMemo(() => placesOf(home), [home])
-    const [found, setFound] = useState<readonly string[]>([home])
+    const [found, setFound] = useState<readonly string[] | null>(null)
     useEffect(() => { void existing(all.map(place => place.path)).then(setFound) }, [all])
-    return all.filter(place => found.includes(place.path))
+    useFirstArrival(found !== null)
+    return all.filter(place => (found ?? [home]).includes(place.path))
 }
 
 /**
@@ -643,9 +647,10 @@ function Tasks() {
 
 /** The long operations of every Files window, as the Server announces them. */
 function useTasks() {
-    const [tasks, setTasks] = useState<readonly Task[]>([])
+    const [tasks, setTasks] = useState<readonly Task[] | null>(null)
     useEffect(() => followTasks(setTasks), [])
-    return tasks
+    useFirstArrival(tasks !== null)
+    return tasks ?? []
 }
 
 /** Drops on places: into the place's folder, moved or copied as anywhere else. */

@@ -5,6 +5,7 @@ import FileIcon from "./file-icon"
 import type { Entry } from "./entries"
 import { followShelf, shelfFolder, shelve, unshelve, type Clipboard } from "./files-server"
 import EntryMenu from "./panel-menu"
+import { useFirstArrival } from "./readiness"
 import { bring, dragItems, entriesType, fromDataTransfer } from "./transfer"
 
 /**
@@ -14,8 +15,10 @@ import { bring, dragItems, entriesType, fromDataTransfer } from "./transfer"
  * and everything on it drags out again, into any Files window or folder.
  */
 export default function Shelf({ clipboard, onOpen }: Readonly<{ clipboard: Clipboard, onOpen: (entry: Entry) => void }>) {
-    const [entries, setEntries] = useState<readonly Entry[]>([])
-    useEffect(() => followShelf(setEntries), [])
+    const [held, setHeld] = useState<readonly Entry[] | null>(null)
+    useEffect(() => followShelf(setHeld), [])
+    useFirstArrival(held !== null)
+    const entries = held ?? []
 
     const { dragAndDropHooks } = useDragAndDrop({
         getItems: keys => dragItems([...keys].map(String)),

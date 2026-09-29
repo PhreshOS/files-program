@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { context } from "@phreshos/client"
 import type { Launch } from "@phreshos/core"
 import { Switch } from "@phreshos/react-ui"
+import { useFirstArrival } from "./readiness"
 
 /**
  * The panel: a Files window of its own in the `over` layer, at the edge of the screen. Like every
@@ -48,6 +49,7 @@ export default function FilesSettings() {
     const [problem, setProblem] = useState<string | null>(null)
 
     useEffect(() => { void panelIsOn().then(setPanelShown) }, [])
+    useFirstArrival(panel !== null)
 
     async function change(on: boolean) {
         setProblem(null)

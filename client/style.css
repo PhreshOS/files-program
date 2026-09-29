@@ -17,13 +17,8 @@ body,
     background: transparent;
 }
 
-.opening {
-    width: min(22rem, calc(100% - 2rem));
-    height: 100%;
-    margin-inline: auto;
-    display: grid;
-    place-items: center;
-}
+/* The Loading cover fills the whole window. */
+#files { position: relative; }
 
 .file-icon { flex: none; }
 
@@ -308,6 +303,7 @@ header [role="toolbar"],
 
 /* The panel at the edge of the screen; while it waits, it shows nothing but still catches the pointer. */
 .panel {
+    position: relative;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 0.25rem;

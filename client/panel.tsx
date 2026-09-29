@@ -1,12 +1,13 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { context } from "@phreshos/client"
 import { useDesktopViewport, useSystemAppearance } from "@phreshos/react"
-import { Button, ContextMenu, DropdownMenu, Menu, ScrollArea, Tree, useDragAndDrop } from "@phreshos/react-ui"
+import { Button, ContextMenu, DropdownMenu, Loading, Menu, ScrollArea, Tree, useDragAndDrop } from "@phreshos/react-ui"
 import { ChevronDown, Pin, PinOff, SquareArrowOutUpRight } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import { sortEntries, type Entry } from "./entries"
 import { existing, followClipboard, followFolders, homePath, listFolder, type Clipboard } from "./files-server"
 import EntryMenu, { type MenuPlace } from "./panel-menu"
+import { Arrival } from "./readiness"
 import Shelf from "./shelf"
 import { bring, dragItems, dropInto, dropOperation, type Transfer } from "./transfer"
 
@@ -146,7 +147,7 @@ export default function Panel() {
     usePanelPlacement(open, side)
 
     const [home, setHome] = useState<string | null>(null)
-    const [found, setFound] = useState<readonly string[]>([])
+    const [found, setFound] = useState<readonly string[] | null>(null)
     const [root, setRoot] = useState<string | null>(null)
     const [expanded, setExpanded] = useState<readonly string[]>([])
     useEffect(() => { void homePath().then(path => { setHome(path); setRoot(current => current ?? path) }) }, [])
@@ -160,7 +161,7 @@ export default function Panel() {
     const rootName = place?.name ?? root?.slice(root.lastIndexOf("/") + 1) ?? "Files"
 
     // The entry a right press was on; on no entry, the folder the tree shows.
-    const [clipboard, setClipboard] = useState<Clipboard>(null)
+    const [clipboard, setClipboard] = useState<Clipboard | undefined>(undefined)
     useEffect(() => followClipboard(setClipboard), [])
     const [menuFor, setMenuFor] = useState<Readonly<{ entry: Entry, place: MenuPlace }> | null>(null)
     function menuUnder(target: EventTarget) {
@@ -209,7 +210,9 @@ export default function Panel() {
         </Tree.Item>)
     }
 
-    return <nav aria-label="Files" className={open ? "panel" : "panel panel-waiting"}>
+    // The panel shows once its folder, the places, the clipboard, and the shelf have arrived.
+    return <nav aria-label="Files" className={open ? "panel" : "panel panel-waiting"}><Loading>
+        <Arrival arrived={root !== null && listings.has(root) && found !== null && clipboard !== undefined} />
         <div className="panel-header">
             <DropdownMenu>
                 <DropdownMenu.Trigger depth="none" size="small" style={{ minWidth: 0, flexShrink: 1 }} aria-label={`${rootName}, change folder`}>
@@ -217,7 +220,7 @@ export default function Panel() {
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
                     <Menu aria-label="Show a folder" size="small" onAction={key => { setRoot(String(key)); setExpanded([]) }}>
-                        {places.filter(item => found.includes(item.path)).map(item => <Menu.Item key={item.path} id={item.path}>
+                        {places.filter(item => found?.includes(item.path)).map(item => <Menu.Item key={item.path} id={item.path}>
                             <FileIcon kind="folder" mark={item.mark} />{item.name}
                         </Menu.Item>)}
                         <Menu.Item id="/"><FileIcon kind="drive" />Root</Menu.Item>
@@ -237,9 +240,9 @@ export default function Panel() {
                 </ScrollArea>
             </ContextMenu.Trigger>
             <ContextMenu.Content>
-                {menuFor && <EntryMenu entry={menuFor.entry} place={menuFor.place} clipboard={clipboard} onOpen={openEntry} />}
+                {menuFor && <EntryMenu entry={menuFor.entry} place={menuFor.place} clipboard={clipboard ?? null} onOpen={openEntry} />}
             </ContextMenu.Content>
         </ContextMenu>
-        <Shelf clipboard={clipboard} onOpen={openEntry} />
-    </nav>
+        <Shelf clipboard={clipboard ?? null} onOpen={openEntry} />
+    </Loading></nav>
 }

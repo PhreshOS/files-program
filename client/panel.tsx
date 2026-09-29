@@ -15,11 +15,8 @@ import { bring, dragItems, dropInto, dropOperation, type Transfer } from "./tran
 const width = 300
 const edgeWidth = 6
 
-/** How long the pointer rests on the edge before the panel opens; leaving it closes it at once. */
+/** How long the pointer, carrying something or not, rests on the edge before the panel opens; leaving it closes it at once. */
 const openDelay = 150
-
-/** How long a drag is held at the edge before the panel opens for it: the Desktop's own hold. */
-const dragHold = 800
 
 type Side = "left" | "right"
 
@@ -69,52 +66,56 @@ function usePanelPlacement(open: boolean, side: Side) {
 }
 
 /**
- * Whether the panel is open: the pointer resting on the edge opens it, leaving it closes it at once,
- * and a drag held there opens it too. Pinned, it stays open.
+ * Whether the panel is open: the pointer reaching the edge opens it after a moment, carrying
+ * something or not, so a drag can bring entries to the panel; leaving closes it at once. Pinned, it
+ * stays open.
  */
 function useOpening(pinned: boolean, side: Side) {
     const [open, setOpen] = useState(pinned)
     const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-    const openSoon = () => {
+    const cancel = () => {
         clearTimeout(timer.current)
-        timer.current = setTimeout(() => setOpen(true), openDelay)
+        timer.current = undefined
     }
-    const close = () => {
-        clearTimeout(timer.current)
-        setOpen(false)
-    }
-    const onEnter = useEffectEvent(openSoon)
+    // A drag enters every element it crosses; the moment starts with the first entry only.
+    const onEnter = useEffectEvent(() => {
+        if (open || timer.current !== undefined) return
+        timer.current = setTimeout(() => {
+            timer.current = undefined
+            setOpen(true)
+        }, openDelay)
+    })
     // The pointer that leaves toward the screen edge is in the spacing beside the panel, still at the
     // edge that opened it: the panel stays.
-    const onLeave = useEffectEvent((event: PointerEvent) => {
+    const onLeave = useEffectEvent((event: MouseEvent) => {
+        cancel()
         const towardEdge = side === "left" ? event.clientX <= 0 : event.clientX >= window.innerWidth - 1
-        if (!pinned && !towardEdge) close()
-    })
-    const onDrag = useEffectEvent(() => {
-        // A drag keeps repeating `dragover` while it stays; the hold starts with the first one.
-        if (!open && timer.current === undefined) timer.current = setTimeout(() => { timer.current = undefined; setOpen(true) }, dragHold)
+        if (!pinned && !towardEdge) setOpen(false)
     })
 
     // Unpinned while the pointer is already elsewhere, it closes as if the pointer had just left.
     useEffect(() => {
-        clearTimeout(timer.current)
+        cancel()
         if (pinned) setOpen(true)
-        else if (!document.documentElement.matches(":hover")) close()
+        else if (!document.documentElement.matches(":hover")) setOpen(false)
     }, [pinned])
 
     useEffect(() => {
         const root = document.documentElement
         const enter = () => onEnter()
-        const leave = (event: PointerEvent) => onLeave(event)
-        const drag = () => onDrag()
+        const leave = (event: MouseEvent) => onLeave(event)
+        // A drag leaves the panel only when it goes outside it, not from one element to another.
+        const dragLeave = (event: DragEvent) => { if (event.relatedTarget === null) onLeave(event) }
         root.addEventListener("pointerenter", enter)
         root.addEventListener("pointerleave", leave)
-        root.addEventListener("dragover", drag)
+        root.addEventListener("dragenter", enter)
+        root.addEventListener("dragleave", dragLeave)
         return () => {
             root.removeEventListener("pointerenter", enter)
             root.removeEventListener("pointerleave", leave)
-            root.removeEventListener("dragover", drag)
-            clearTimeout(timer.current)
+            root.removeEventListener("dragenter", enter)
+            root.removeEventListener("dragleave", dragLeave)
+            cancel()
         }
     }, [])
 

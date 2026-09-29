@@ -329,4 +329,4 @@ header [role="toolbar"],
 .shelf-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shelf-remove { visibility: hidden; }
 [role="row"]:hover .shelf-remove, [role="row"][data-focus-visible] .shelf-remove { visibility: visible; }
-.shelf-empty { margin: 0; padding: 0.5rem; opacity: 0.6; text-align: center; }
+.shelf-empty { margin: 0; padding: 0.5rem; font-size: 0.75rem; opacity: 0.6; text-align: center; }

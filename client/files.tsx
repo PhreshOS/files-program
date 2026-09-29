@@ -220,7 +220,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                     <SegmentedControl.Item id="grid" aria-label="Icons"><LayoutGrid /></SegmentedControl.Item>
                 </SegmentedControl>}</div>
         </AppLayout.Header>
-        <AppLayout.Content style={{ containerType: "size" }}>
+        <AppLayout.Content depth="recessed" style={{ containerType: "size" }}>
             {at.file ? <FileView file={at.file} mode={fileMode} /> : <ContextMenu>
                 <ContextMenu.Trigger>
                     <div ref={entriesRef} className={`entries${entryDrag.around ? " drop-target" : ""}`}

@@ -3,6 +3,7 @@ import { context } from "@phreshos/client"
 import type { Launch } from "@phreshos/core"
 import { Switch } from "@phreshos/react-ui"
 import { useFirstArrival } from "./readiness"
+import { besideThisWindow } from "./windows"
 
 /**
  * The panel: a Files window of its own in the `over` layer, at the edge of the screen. Like every
@@ -11,10 +12,27 @@ import { useFirstArrival } from "./readiness"
  */
 export const panelLaunch = { name: "panel", server: false, client: { layer: "over", title: "Files" }, options: { view: "panel" } } as const satisfies Launch & { name: string }
 
-/** Opens the settings of Files, in one small window of their own. */
+/**
+ * Opens the settings of Files, in one small window of their own, beside the window that asked. When
+ * they are already open somewhere, they come to that window instead: beside it, shown, and in front.
+ */
 export async function openSettings() {
     const program = await context.program()
-    await program.findOrCreateProcess({ name: "settings", server: false, client: { title: "Files Settings", size: { width: 440, height: 260 } }, options: { view: "settings" } })
+    const position = await besideThisWindow()
+    const open = await program.findProcess("settings")
+    if (!open) {
+        await program.createProcess({
+            name: "settings",
+            server: false,
+            client: { title: "Files Settings", size: { width: 440, height: 260 }, ...(position ? { position } : {}) },
+            options: { view: "settings" }
+        })
+        return
+    }
+    const { window } = open.client
+    if (position) await window.move(position)
+    await window.minimize(false)
+    await window.raise()
 }
 
 /** Whether the panel is on: it is running, or starts with the System. */

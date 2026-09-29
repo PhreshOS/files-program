@@ -309,7 +309,7 @@ header [role="toolbar"],
 /* The panel at the edge of the screen; while it waits, it shows nothing but still catches the pointer. */
 .panel {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 0.25rem;
     height: 100%;
     padding: 0.625rem 0.5rem;
@@ -320,3 +320,12 @@ header [role="toolbar"],
 .panel-root { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-spacer { flex: 1 1 auto; }
 .panel-tree { min-height: 0; }
+
+/* The shelf: below the tree, as tall as what it holds, up to a third of the panel. */
+.shelf { display: grid; gap: 0.25rem; padding-top: 0.5rem; }
+.shelf-title { padding-inline: 0.5rem; font-weight: 600; }
+.shelf-well { max-height: 33vh; min-height: 3.5rem; overflow: auto; padding: 0.25rem; }
+.shelf-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shelf-remove { visibility: hidden; }
+[role="row"]:hover .shelf-remove, [role="row"][data-focus-visible] .shelf-remove { visibility: visible; }
+.shelf-empty { margin: 0; padding: 0.75rem 0.5rem; opacity: 0.6; text-align: center; }

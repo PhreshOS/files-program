@@ -4,6 +4,7 @@ import { z } from "zod"
 import { clipboardHolder } from "./clipboard"
 import { entryAt, existingFolders, home, listFolder, readFile } from "./folders"
 import { copyEntries, createFile, createFolder, moveEntries, renameEntry, trashEntries, writeNewFile } from "./operations"
+import { shelfHolder } from "./shelf"
 import { taskList } from "./tasks"
 import { folderWatch } from "./watch"
 
@@ -18,6 +19,11 @@ const tasks = taskList(list => context.publish("tasks.changed", list))
 
 /** What was copied or cut, announced to every window when it changes. */
 const clipboard = clipboardHolder(held => context.publish("clipboard.changed", held))
+
+/** What was put on the shelf, announced to every window when it changes; kept in the Program's own data. */
+const shelfFolder = (await context.program()).data.navigate("Shelf")
+await shelfFolder.create()
+const shelf = await shelfHolder(await shelfFolder.path(), held => context.publish("shelf.changed", held))
 
 /** Runs one change and announces the folders it changed. */
 async function change<Result extends { changed: readonly string[] }>(run: Promise<Result>) {
@@ -188,4 +194,33 @@ context.answer("clipboard.paste", async ({ payload }) => {
     const result = await move(held.paths, destination)
     clipboard.set(null)
     return result
+})
+
+/**
+ * The entries on the shelf. One that is gone from where it was is gone from the shelf too; the
+ * folders they are in are watched, so windows learn when that happens.
+ */
+context.answer("shelf.list", async () => {
+    const held = shelf.get()
+    const found = await Promise.all(held.map(path => entryAt(path).catch(() => null)))
+    const gone = held.filter((_, index) => !found[index])
+    if (gone.length) shelf.remove(gone)
+    for (const folder of new Set(held.map(dirname))) watch.follow(folder)
+    return found.filter(entry => entry !== null)
+})
+
+/** The shelf's own folder, where files from the device are written before they are put on it. */
+context.answer("shelf.folder", () => shelf.folder)
+
+context.answer("shelf.add", ({ payload }) => { shelf.add(z.object({ paths }).parse(payload).paths) })
+
+/**
+ * Takes entries off the shelf. Those in the shelf's own folder have nowhere else to be, so they go
+ * to the Trash, from where they can still come back.
+ */
+context.answer("shelf.remove", async ({ payload }) => {
+    const removed = z.object({ paths }).parse(payload).paths
+    shelf.remove(removed)
+    const owned = removed.filter(shelf.owns)
+    if (owned.length) await task([shelf.folder], "trash", `Moving ${entriesIn(owned)} to the Trash`, "items", progress => trashEntries(owned, progress))
 })

@@ -15,11 +15,12 @@ type FileContent = Readonly<{ bytes: Uint8Array, size: number, modified: number 
 type Shared = Readonly<{ process: Process, server: ServerEndpoint }>
 let shared: Promise<Shared> | undefined
 
-/** Who follows what the Server announces: a folder that changed, the clipboard, and the tasks. */
+/** Who follows what the Server announces: a folder that changed, the clipboard, the tasks, and the shelf. */
 const followers = {
     folder: new Set<(path: string) => void>(),
     clipboard: new Set<(clipboard: Clipboard) => void>(),
-    tasks: new Set<(tasks: readonly Task[]) => void>()
+    tasks: new Set<(tasks: readonly Task[]) => void>(),
+    shelf: new Set<() => void>()
 }
 
 /**
@@ -34,6 +35,7 @@ function server() {
         process.server.subscribe("folder.changed", payload => { for (const follow of followers.folder) follow((payload as { path: string }).path) })
         process.server.subscribe("clipboard.changed", payload => { for (const follow of followers.clipboard) follow(payload as Clipboard) })
         process.server.subscribe("tasks.changed", payload => { for (const follow of followers.tasks) follow(payload as readonly Task[]) })
+        process.server.subscribe("shelf.changed", () => { for (const follow of followers.shelf) follow() })
         return { process, server: process.server }
     })().catch(error => { shared = undefined; throw error })
     return shared
@@ -108,6 +110,42 @@ export function followTasks(follow: (tasks: readonly Task[]) => void) {
     followers.tasks.add(follow)
     void ask<readonly Task[]>("tasks.list").then(tasks => { if (followers.tasks.has(follow)) follow(tasks) })
     return () => { followers.tasks.delete(follow) }
+}
+
+/**
+ * Follows the shelf, from what it holds now on. An entry renamed, moved, or removed elsewhere leaves
+ * it; the folder it was in announces that.
+ */
+export function followShelf(follow: (entries: readonly Entry[]) => void) {
+    let held: readonly Entry[] = []
+    const list = () => void ask<FolderEntry[]>("shelf.list").then(entries => {
+        if (!followers.shelf.has(list)) return
+        held = entries.map(entryOf)
+        follow(held)
+    })
+    const changed = (path: string) => { if (held.some(entry => entry.path.slice(0, entry.path.lastIndexOf("/")) === path)) list() }
+    followers.shelf.add(list)
+    followers.folder.add(changed)
+    list()
+    return () => {
+        followers.shelf.delete(list)
+        followers.folder.delete(changed)
+    }
+}
+
+/** Puts entries of this machine on the shelf; they stay where they are. */
+export function shelve(paths: readonly string[]) {
+    return ask("shelf.add", { paths })
+}
+
+/** Takes entries off the shelf; those that came from the device go to the Trash. */
+export function unshelve(paths: readonly string[]) {
+    return ask("shelf.remove", { paths }, long)
+}
+
+/** The shelf's own folder, where files from the device are written. */
+export function shelfFolder() {
+    return ask<string>("shelf.folder")
 }
 
 export function stopTask(id: string) {

@@ -6,6 +6,7 @@ import { ChevronDown, Pin, PinOff, SquareArrowOutUpRight } from "@phreshos/react
 import FileIcon, { type FolderMark } from "./file-icon"
 import { sortEntries, type Entry } from "./entries"
 import { existing, followFolders, homePath, listFolder } from "./files-server"
+import Shelf from "./shelf"
 import { bring, dragItems, dropInto, dropOperation, type Transfer } from "./transfer"
 
 /** How wide the panel is, and how much of it stays on the screen while it waits. */
@@ -124,7 +125,7 @@ async function openInFiles(path: string, name: string) {
 /**
  * Files at the edge of the screen: one folder as a tree, the way a code editor shows its project.
  * Folders open in place; a file opens in a Files window. Entries drag out of the tree and into its
- * folders, as in every Files window.
+ * folders, as in every Files window. Below it, the shelf keeps entries at hand.
  */
 export default function Panel() {
     const [pinned, setPinned] = useState(false)
@@ -199,5 +200,6 @@ export default function Panel() {
                 {renderFolder(root)}
             </Tree>}
         </ScrollArea>
+        <Shelf onOpen={entry => void openInFiles(entry.path, entry.name)} />
     </nav>
 }

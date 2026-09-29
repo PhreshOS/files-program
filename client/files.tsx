@@ -161,7 +161,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         return () => removeEventListener("keydown", listen, true)
     }, [])
 
-    const entryDrag = useEntryDrag(entries, folderPath, transfer)
+    const entryDrag = useEntryDrag(entries, folderPath, transfer, open)
     // The entries cover the whole content, its padding too, so the space around them takes a
     // right-click for the folder's menu and a drop into the folder.
     const [entriesRef, contentPadding] = useContentPadding()
@@ -466,10 +466,11 @@ function useStatus() {
 /**
  * Dragging entries: out of the collection, to another folder in it or in another Files window, and
  * into it from there or from the owner's device. The collection takes drops on its folders and on
- * itself; the space around it takes drops for the folder it shows. A drag moves entries, or copies
+ * itself; the space around it takes drops for the folder it shows, and a folder the drag is held over
+ * opens. A drag moves entries, or copies
  * them with the copy key held, Option on a Mac and Control elsewhere; files from a device are copied.
  */
-function useEntryDrag(entries: readonly Entry[], folder: string, transfer: (incoming: Incoming, into: string, operation: "move" | "copy") => void) {
+function useEntryDrag(entries: readonly Entry[], folder: string, transfer: (incoming: Incoming, into: string, operation: "move" | "copy") => void, openFolder: (path: string) => void) {
     const folders = new Set(entries.filter(entry => entry.kind === "folder").map(entry => entry.path))
     const drop = async (items: readonly DropItem[], into: string, operation: DropOperation) => {
         const incoming = await fromDropItems(items)
@@ -484,6 +485,8 @@ function useEntryDrag(entries: readonly Entry[], folder: string, transfer: (inco
             return types.has(entriesType) ? allowed[0] ?? "cancel" : "copy"
         },
         onItemDrop: event => void drop(event.items, String(event.target.key), event.dropOperation),
+        // A drag held over a folder opens it, so the drag can go on deeper.
+        onDropActivate: event => { if (event.target.type === "item" && folders.has(String(event.target.key))) openFolder(String(event.target.key)) },
         onRootDrop: event => void drop(event.items, folder, event.dropOperation)
     })
 

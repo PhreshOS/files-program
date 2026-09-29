@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
@@ -175,7 +175,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const [drawer, setDrawer] = useState(false)
     // A place chosen from the drawer also closes it.
     const choose = (path: string | null) => { if (path) go(path); setDrawer(false) }
-    const placesNav = <Places places={places} place={place} onChoose={choose} />
+    const placesNav = <Places places={places} place={place} onChoose={choose} transfer={transfer} />
 
     // The space between the files and the footer is kept after the files too, and below the footer.
     // A narrow window gives the places up to the files and keeps them one press away, in a drawer.
@@ -326,7 +326,7 @@ type CollectionProps = Readonly<{
 // As in every file manager, a press chooses one entry, with Command or Shift it adds more, and a
 // double press opens it.
 function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps & Readonly<{ sort: TableSort, onSort: (sort: TableSort) => void }>) {
-    return <ScrollArea axis="horizontal"><div className="list-columns"><Table aria-label="Entries" size="small" selectionMode="multiple" selectionBehavior="replace" value={selected} onChange={onSelect} onAction={onOpen} sort={sort} onSortChange={onSort} dragAndDropHooks={dragAndDropHooks}>
+    return <ScrollArea axis="horizontal"><div className="list-columns"><Table aria-label="Entries" size="small" selectionMode="multiple" selectionBehavior="replace" value={selected} onChange={onSelect} onAction={onOpen} sort={sort} onSortChange={onSort} dragAndDropHooks={dragAndDropHooks} style={{ outline: "none" }}>
         <Table.Header>
             <Table.Column id="name" rowHeader sortable>Name</Table.Column>
             <Table.Column id="modified" sortable>Modified</Table.Column>
@@ -348,7 +348,7 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
 
 function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps) {
     if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
-    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" itemWidth="6.5rem" style={{ alignContent: "start" }} value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
+    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" itemWidth="6.5rem" style={{ alignContent: "start", outline: "none" }} value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
         {entries.map(entry => <GridList.Item key={entry.path} id={entry.path} textValue={entry.name}>
             <span className={`tile${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} size={48} />
                 {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : <span className="tile-name">{entry.name}</span>}
@@ -470,7 +470,7 @@ function useStatus() {
  * opens. A drag moves entries, or copies
  * them with the copy key held, Option on a Mac and Control elsewhere; files from a device are copied.
  */
-function useEntryDrag(entries: readonly Entry[], folder: string, transfer: (incoming: Incoming, into: string, operation: "move" | "copy") => void, openFolder: (path: string) => void) {
+function useEntryDrag(entries: readonly Entry[], folder: string, transfer: Transfer, openFolder: (path: string) => void) {
     const folders = new Set(entries.filter(entry => entry.kind === "folder").map(entry => entry.path))
     const drop = async (items: readonly DropItem[], into: string, operation: DropOperation) => {
         const incoming = await fromDropItems(items)
@@ -499,7 +499,8 @@ function useEntryDrag(entries: readonly Entry[], folder: string, transfer: (inco
     return {
         hooks: dragAndDropHooks,
         around,
-        style: around ? { outline: `3px solid color-mix(in oklab, ${colors.primary} 34%, transparent)`, outlineOffset: -3 } : undefined,
+        // One outline, the content's, marks a drop into this folder, wherever in the content it lands.
+        style: { "--drop-outline": `color-mix(in oklab, ${colors.primary} 34%, transparent)` } as CSSProperties,
         over(event: DragEvent) {
             const takes = outside(event) && accepts(event)
             setAround(takes)
@@ -587,19 +588,38 @@ function useContentPadding() {
     return [ref, padding] as const
 }
 
-function Places({ places, place, onChoose }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void }>) {
+type Transfer = (incoming: Incoming, into: string, operation: "move" | "copy") => void
+
+/**
+ * The places, each a folder that takes what is dropped on it, as a folder in the list does; one
+ * the drag is held over opens.
+ */
+function Places({ places, place, onChoose, transfer }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void, transfer: Transfer }>) {
+    const favorites = usePlaceDrop(transfer, onChoose)
+    const machine = usePlaceDrop(transfer, onChoose)
     return <nav aria-label="Places" className="places">
         <div className="places-heading">Favorites</div>
-        <Tree aria-label="Favorites" selectionMode="single" value={place} onChange={onChoose}>
+        <Tree aria-label="Favorites" selectionMode="single" value={place} onChange={onChoose} dragAndDropHooks={favorites}>
             {places.map(item => <Tree.Item key={item.path} id={item.path} textValue={item.name}>
                 <Tree.Content><FileIcon kind="folder" mark={item.mark} size={18} />{item.name}</Tree.Content>
             </Tree.Item>)}
         </Tree>
         <div className="places-heading">This machine</div>
-        <Tree aria-label="This machine" selectionMode="single" value={place} onChange={onChoose}>
+        <Tree aria-label="This machine" selectionMode="single" value={place} onChange={onChoose} dragAndDropHooks={machine}>
             <Tree.Item id="/" textValue="Root"><Tree.Content><FileIcon kind="drive" size={18} />Root</Tree.Content></Tree.Item>
         </Tree>
     </nav>
+}
+
+/** Drops on places: into the place's folder, moved or copied as anywhere else. */
+function usePlaceDrop(transfer: Transfer, open: (path: string) => void) {
+    return useDragAndDrop({
+        getDropOperation: (target, types, allowed) => target.type !== "item" ? "cancel" : types.has(entriesType) ? allowed[0] ?? "cancel" : "copy",
+        onItemDrop: event => void fromDropItems(event.items).then(incoming => {
+            if (incoming) transfer(incoming, String(event.target.key), event.dropOperation === "copy" ? "copy" : "move")
+        }),
+        onDropActivate: event => { if (event.target.type === "item") open(String(event.target.key)) }
+    }).dragAndDropHooks
 }
 
 /** Narrow enough that the places would crowd the files out. */

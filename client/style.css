@@ -88,6 +88,13 @@ header [role="toolbar"],
     display: grid;
 }
 
+/* A drop into this folder, on the space around the entries or on the entries themselves. */
+.entries.drop-target,
+.entries:has(:is(table, [role=grid])[data-drop-target]) {
+    outline: 3px solid var(--drop-outline);
+    outline-offset: -3px;
+}
+
 .name {
     display: inline-flex;
     align-items: center;

@@ -74,7 +74,10 @@ export async function bring(incoming: Incoming, folder: string, operation: "move
 }
 
 async function upload(entry: DeviceEntry, folder: string): Promise<string> {
-    if (entry.kind === "file") return (await writeFile(folder, entry.name, (await entry.file()).stream())).path
+    if (entry.kind === "file") {
+        const file = await entry.file()
+        return (await writeFile(folder, entry.name, file.stream(), file.size)).path
+    }
     const { path } = await createFolder(folder, entry.name)
     for await (const child of entry.entries()) await upload(child, path)
     return path

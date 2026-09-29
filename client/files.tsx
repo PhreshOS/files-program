@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
-import { copyEntries, createFile, createFolder, existing, fileBlob, followClipboard, followFolders, listFolder, paste, renameEntry, setClipboard, trashEntries, type Clipboard } from "./folders"
+import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./folders"
 import useMarquee from "./marquee"
 import { bring, dragItems, entriesType, fromDataTransfer, fromDropItems, fromFiles, type Incoming } from "./transfer"
 
@@ -103,10 +103,15 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     /** Chooses the entries a change made, once the folder shows them. */
     const select = (paths: readonly string[] | undefined) => { if (paths?.length) setSelected(paths) }
 
+    /**
+     * Runs a change the Server keeps as a task: the places show how far it is, and why it failed, in
+     * every window, so the footer stays out of it.
+     */
+    const asTask = <Result,>(change: () => Promise<Result>) => change().catch(() => undefined)
+
     /** Brings what was dropped or chosen from the device into a folder. */
     function transfer(incoming: Incoming, into: string, operation: "move" | "copy") {
-        const doing = "paths" in incoming ? operation === "copy" ? "Copying…" : "Moving…" : "Uploading…"
-        void status.run(doing, () => bring(incoming, into, operation)).then(paths => { if (into === folderPath) select(paths) })
+        void asTask(() => bring(incoming, into, operation)).then(paths => { if (into === folderPath) select(paths) })
     }
 
     /** What the menus, the keys, and the buttons ask of the chosen entries, or of the folder when none is. */
@@ -123,11 +128,11 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
             case "new-folder": create(createFolder); break
             case "new-file": create(createFile); break
             case "upload": upload.current?.click(); break
-            case "duplicate": if (paths.length) void status.run("Duplicating…", () => copyEntries(paths, folderPath)).then(done => select(done?.paths)); break
+            case "duplicate": if (paths.length) void asTask(() => copyEntries(paths, folderPath)).then(done => select(done?.paths)); break
             case "copy": case "cut": if (paths.length) void status.run(null, () => setClipboard({ mode: action, paths })); break
-            case "paste": if (clipboard) void status.run(clipboard.mode === "cut" ? "Moving…" : "Copying…", () => paste(folderPath)).then(done => select(done?.paths)); break
-            case "trash": if (paths.length) void status.run("Moving to the Trash…", () => trashEntries(paths)).then(() => setSelected([])); break
-            case "download": if (paths.length) void status.run("Preparing the download…", () => download(chosen)); break
+            case "paste": if (clipboard) void asTask(() => paste(folderPath)).then(done => select(done?.paths)); break
+            case "trash": if (paths.length) void asTask(() => trashEntries(paths)).then(() => setSelected([])); break
+            case "download": if (paths.length) void asTask(() => download(chosen)); break
             case "copy-path": void status.run(null, () => navigator.clipboard.writeText((paths.length ? paths : [folderPath]).join("\n"))); break
         }
     }
@@ -184,7 +189,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     // A narrow window gives the places up to the files and keeps them one press away, in a drawer.
     return <AppLayout sidebarWidth={narrow ? 0 : undefined} style={{ paddingInlineEnd: "0.625rem", paddingBottom: "0.625rem", ...(narrow ? { columnGap: 0, paddingInlineStart: "0.625rem" } : {}) }}>
         {!narrow && <AppLayout.Title style={{ fontSize: "1.125rem", paddingInline: "0.875rem" }}>Files</AppLayout.Title>}
-        {!narrow && <AppLayout.Sidebar aria-label="Places">{placesNav}</AppLayout.Sidebar>}
+        {!narrow && <AppLayout.Sidebar aria-label="Places" footer={<Tasks />}>{placesNav}</AppLayout.Sidebar>}
         <AppLayout.Header style={{ gap: "0.75rem", paddingInline: "0.375rem", marginBottom: "0.375rem" }}>
             <Toolbar aria-label="Navigation" gap="xsmall">
                 {narrow && <Button iconOnly depth="flat" size="small" aria-label="Places" aria-expanded={drawer} onPress={() => setDrawer(!drawer)}><PanelLeft /></Button>}
@@ -260,7 +265,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                 if (files.length) transfer(fromFiles(files), folderPath, "copy")
             }} />
         </AppLayout.Content>
-        {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)}>{placesNav}</Drawer>}
+        {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)}>{placesNav}<Tasks /></Drawer>}
         <AppLayout.Footer style={{ paddingInline: "0.75rem 0.375rem", paddingTop: "0.625rem" }}>
             {at.file ? <>
             {wallpaperType(at.file) && <DropdownMenu>
@@ -615,6 +620,40 @@ function Places({ places, place, onChoose, transfer }: Readonly<{ places: Return
             <Tree.Item id="/" textValue="Root"><Tree.Content><FileIcon kind="drive" size={18} />Root</Tree.Content></Tree.Item>
         </Tree>
     </nav>
+}
+
+/**
+ * The long operations of every Files window, at the foot of the places, where they stay while the
+ * places scroll: how far each is, with a way to stop it; one that failed says why until dismissed.
+ */
+function Tasks() {
+    const tasks = useTasks()
+    const danger = useThemedValue(useAppearance().colors).danger
+    if (!tasks.length) return null
+    return <section aria-label="Tasks" className="tasks">
+        <div className="places-heading">Tasks</div>
+        {tasks.map(task => <div key={task.id} className="task">
+            <div className="task-title">
+                <span title={task.title}>{task.title}</span>
+                {task.state === "failed"
+                    ? <Button iconOnly depth="none" size="xsmall" aria-label="Dismiss" onPress={() => void dismissTask(task.id)}><X /></Button>
+                    : <Button iconOnly depth="none" size="xsmall" aria-label="Stop" onPress={() => void stopTask(task.id)}><X /></Button>}
+            </div>
+            {task.state === "failed"
+                ? <div className="task-detail" style={{ color: danger, opacity: 1 }}>{problemOf(new Error(task.problem ?? ""), "It could not finish.")}</div>
+                : <>
+                    <ProgressBar aria-label={task.title} size="small" value={task.done} maxValue={task.total || 1} indeterminate={!task.total} />
+                    <div className="task-detail">{task.total === null ? "Measuring…" : task.unit === "bytes" ? `${formatSize(task.done)} of ${formatSize(task.total)}` : `${task.done} of ${task.total}`}</div>
+                </>}
+        </div>)}
+    </section>
+}
+
+/** The long operations of every Files window, as the Server announces them. */
+function useTasks() {
+    const [tasks, setTasks] = useState<readonly Task[]>([])
+    useEffect(() => followTasks(setTasks), [])
+    return tasks
 }
 
 /** Drops on places: into the place's folder, moved or copied as anywhere else. */

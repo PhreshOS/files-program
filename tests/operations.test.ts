@@ -79,3 +79,37 @@ test("a written file takes a free name, and a failed write leaves nothing", asyn
     await expect(writeNewFile(join(root, "a"), "broken.txt", failing)).rejects.toThrow("Lost")
     expect(await names(join(root, "a"))).toEqual(["note 2.txt", "note.txt"])
 })
+
+test("a copy counts its bytes, and one stopped halfway leaves nothing of the entry it was copying", async () => {
+    await writeFile(join(root, "a", "big.bin"), new Uint8Array(3 * 1024 * 1024))
+    let total = 0, done = 0
+    await copyEntries([join(root, "a")], join(root, "b"), { measured: amount => { total = amount }, advanced: amount => { done += amount } })
+    expect(total).toBe(3 * 1024 * 1024 + 5)
+    expect(done).toBe(total)
+
+    const controller = new AbortController()
+    let copied = 0
+    const stopping = copyEntries([join(root, "a", "big.bin")], join(root, "b"), { signal: controller.signal, advanced: amount => { copied += amount; if (copied > 0) controller.abort(new Error("Stopped")) } })
+    await expect(stopping).rejects.toThrow()
+    expect(await names(join(root, "b"))).toEqual(["a"])
+})
+
+test("tasks: one that ends leaves the list, one that fails stays with its problem, one stopped leaves", async () => {
+    const { taskList } = await import("../server/tasks")
+    const announced: unknown[] = []
+    const tasks = taskList(list => announced.push(list))
+
+    await tasks.run("copy", "Copying", "bytes", async progress => { progress.measured?.(10); progress.advanced?.(10) })
+    expect(tasks.list()).toEqual([])
+
+    await expect(tasks.run("move", "Moving", "items", async () => { throw new Error("Disk full") })).rejects.toThrow("Disk full")
+    const [failed] = tasks.list()
+    expect(failed).toMatchObject({ kind: "move", state: "failed", problem: "Disk full" })
+    tasks.dismiss(failed!.id)
+    expect(tasks.list()).toEqual([])
+
+    const running = tasks.run("copy", "Copying", "bytes", progress => new Promise((_resolve, reject) => progress.signal?.addEventListener("abort", () => reject(progress.signal?.reason))))
+    tasks.stop(tasks.list()[0]!.id)
+    await expect(running).rejects.toThrow("Stopped")
+    expect(tasks.list()).toEqual([])
+})

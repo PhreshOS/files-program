@@ -1,6 +1,7 @@
 import { context } from "@phreshos/client"
 import type { Process, ServerEndpoint } from "@phreshos/core"
 import type { FolderEntry } from "../server/folders"
+import type { Task } from "../server/tasks"
 import { kindOf, type Entry } from "./entries"
 
 export type FileContent = Readonly<{ bytes: Uint8Array, size: number, modified: number }>
@@ -14,7 +15,8 @@ export type Clipboard = Readonly<{ mode: "copy" | "cut", paths: readonly string[
 /** Who follows what the Server announces: a folder that changed, and the clipboard. */
 const followers = {
     folder: new Set<(path: string) => void>(),
-    clipboard: new Set<(clipboard: Clipboard) => void>()
+    clipboard: new Set<(clipboard: Clipboard) => void>(),
+    tasks: new Set<(tasks: readonly Task[]) => void>()
 }
 
 /**
@@ -28,6 +30,7 @@ function server() {
         await process.server.waitReady()
         process.server.subscribe("folder.changed", payload => { for (const follow of followers.folder) follow((payload as { path: string }).path) })
         process.server.subscribe("clipboard.changed", payload => { for (const follow of followers.clipboard) follow(payload as Clipboard) })
+        process.server.subscribe("tasks.changed", payload => { for (const follow of followers.tasks) follow(payload as readonly Task[]) })
         return { process, server: process.server }
     })().catch(error => { shared = undefined; throw error })
     return shared
@@ -97,6 +100,21 @@ export function followClipboard(follow: (clipboard: Clipboard) => void) {
     return () => { followers.clipboard.delete(follow) }
 }
 
+/** Follows the long operations of every Files window, from those running now on. */
+export function followTasks(follow: (tasks: readonly Task[]) => void) {
+    followers.tasks.add(follow)
+    void ask<readonly Task[]>("tasks.list").then(tasks => { if (followers.tasks.has(follow)) follow(tasks) })
+    return () => { followers.tasks.delete(follow) }
+}
+
+export function stopTask(id: string) {
+    return ask("tasks.stop", { id })
+}
+
+export function dismissTask(id: string) {
+    return ask("tasks.dismiss", { id })
+}
+
 /** Copying and moving whole folders can take a while; bringing a file from the device even longer. */
 const long = 30 * 60_000
 
@@ -127,9 +145,9 @@ export function trashEntries(paths: readonly string[]) {
     return ask("entries.trash", { paths }, long)
 }
 
-/** A new file in a folder, its bytes streamed to the Server as they are read. */
-export function writeFile(folder: string, name: string, content: ReadableStream<Uint8Array>) {
-    return ask<Created>("file.write", { folder, name, content }, long)
+/** A new file in a folder, its bytes streamed to the Server as they are read; its size lets the task show how far it is. */
+export function writeFile(folder: string, name: string, content: ReadableStream<Uint8Array>, size?: number) {
+    return ask<Created>("file.write", { folder, name, size, content }, long)
 }
 
 export function setClipboard(clipboard: Clipboard) {
@@ -140,9 +158,11 @@ export function paste(destination: string) {
     return ask<Placed>("clipboard.paste", { destination }, long)
 }
 
-/** A file's bytes as one Blob, streamed from the Server, so a large file need not be held twice. */
+/** A file's bytes as one Blob for a download, streamed from the Server as a task every window shows. */
 export async function fileBlob(path: string, type = "") {
-    const answer = await ask<{ content: ReadableStream<Uint8Array> }>("file.read", { path }, long)
+    const answer = await ask<{ content: ReadableStream<Uint8Array> }>("file.read", { path, download: true }, long)
     const blob = await new Response(answer.content).blob()
     return type ? new Blob([blob], { type }) : blob
 }
+
+export type { Task }

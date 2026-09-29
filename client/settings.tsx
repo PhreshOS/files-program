@@ -19,17 +19,14 @@ export const panelLaunch = { name: "panel", server: false, client: { layer: "ove
 export async function openSettings() {
     const program = await context.program()
     const position = await besideThisWindow()
-    const open = await program.findProcess("settings")
-    if (!open) {
-        await program.createProcess({
-            name: "settings",
-            server: false,
-            client: { title: "Files Settings", size: { width: 440, height: 260 }, ...(position ? { position } : {}) },
-            options: { view: "settings" }
-        })
-        return
-    }
-    const { window } = open.client
+    const settings = await program.findOrCreateProcess({
+        name: "settings",
+        server: false,
+        client: { title: "Files Settings", size: { width: 440, height: 260 }, ...(position ? { position } : {}) },
+        options: { view: "settings" }
+    })
+    // Found already open, they come here; just opened, they already stand here.
+    const { window } = settings.client
     if (position) await window.move(position)
     await window.minimize(false)
     await window.raise()

@@ -5,6 +5,7 @@ import FileIcon from "./file-icon"
 import type { Entry } from "./entries"
 import { followShelf, shelfFolder, shelve, unshelve, type Clipboard } from "./files-server"
 import EntryMenu from "./panel-menu"
+import type { Work } from "./work"
 import { useFirstArrival } from "./readiness"
 import { bring, dragItems, entriesType, fromDataTransfer } from "./transfer"
 
@@ -14,7 +15,7 @@ import { bring, dragItems, entriesType, fromDataTransfer } from "./transfer"
  * device are written into the shelf's own folder. Its whole container takes what is dropped on it,
  * and everything on it drags out again, into any Files window or folder.
  */
-export default function Shelf({ clipboard, onOpen }: Readonly<{ clipboard: Clipboard, onOpen: (entry: Entry) => void }>) {
+export default function Shelf({ clipboard, onOpen, work }: Readonly<{ clipboard: Clipboard, onOpen: (entry: Entry) => void, work: Work }>) {
     const [held, setHeld] = useState<readonly Entry[] | null>(null)
     useEffect(() => followShelf(setHeld), [])
     useFirstArrival(held !== null)
@@ -42,8 +43,8 @@ export default function Shelf({ clipboard, onOpen }: Readonly<{ clipboard: Clipb
         const incoming = fromDataTransfer(event.dataTransfer)
         if (!incoming) return
         event.preventDefault()
-        if ("paths" in incoming) void shelve(incoming.paths)
-        else void shelfFolder().then(folder => bring(incoming, folder, "copy")).then(shelve).catch(() => undefined)
+        if ("paths" in incoming) work("Putting it on the shelf…", () => shelve(incoming.paths))
+        else work("Bringing it to the shelf…", () => shelfFolder().then(folder => bring(incoming, folder, "copy")).then(shelve))
     }
 
     // The entry a right press was on; on the empty shelf, the shelf itself.
@@ -67,7 +68,7 @@ export default function Shelf({ clipboard, onOpen }: Readonly<{ clipboard: Clipb
                         {entries.map(entry => <Tree.Item key={entry.path} id={entry.path} textValue={entry.name}>
                             <Tree.Content>
                                 <FileIcon kind={entry.kind} size={16} /><span className="shelf-name">{entry.name}</span>
-                                <Button iconOnly depth="none" size="xsmall" className="shelf-remove" aria-label={`Take ${entry.name} off the shelf`} onPress={() => void unshelve([entry.path])}><X /></Button>
+                                <Button iconOnly depth="none" size="xsmall" className="shelf-remove" aria-label={`Take ${entry.name} off the shelf`} onPress={() => work("Taking it off the shelf…", () => unshelve([entry.path]))}><X /></Button>
                             </Tree.Content>
                         </Tree.Item>)}
                     </Tree>
@@ -76,8 +77,8 @@ export default function Shelf({ clipboard, onOpen }: Readonly<{ clipboard: Clipb
         </ContextMenu.Trigger>
         <ContextMenu.Content>
             {menuFor
-                ? <EntryMenu entry={menuFor} place="shelf" clipboard={clipboard} onOpen={onOpen} />
-                : <Menu aria-label="Shelf" size="small" onAction={() => void unshelve(entries.map(entry => entry.path))}>
+                ? <EntryMenu entry={menuFor} place="shelf" clipboard={clipboard} onOpen={onOpen} work={work} />
+                : <Menu aria-label="Shelf" size="small" onAction={() => work("Clearing the shelf…", () => unshelve(entries.map(entry => entry.path)))}>
                     <Menu.Item id="clear" disabled={!entries.length}><ListX />Clear the shelf</Menu.Item>
                 </Menu>}
         </ContextMenu.Content>

@@ -3,6 +3,7 @@ import { Menu } from "@phreshos/react-ui"
 import { Wallpaper } from "@phreshos/react-ui/icons"
 import { mediaTypeOf, type Entry } from "./entries"
 import { readFile } from "./files-server"
+import type { Work } from "./work"
 
 /** What a wallpaper may be: a picture, a video the browser plays everywhere, or a page; and the most the System takes. */
 const wallpaperVideos = new Set(["video/mp4", "video/webm", "video/ogg"])
@@ -23,18 +24,18 @@ const themes: readonly Readonly<{ id: Theme, name: string }>[] = [{ id: "light",
 /**
  * "Set as wallpaper", an Item that opens where the file becomes the wallpaper. Use it inside a Menu.
  */
-export default function WallpaperSubmenu({ entry }: Readonly<{ entry: Entry }>) {
+export default function WallpaperSubmenu({ entry, work }: Readonly<{ entry: Entry, work: Work }>) {
     return <Menu.Submenu>
         <Menu.Item id="wallpaper"><Wallpaper />Set as wallpaper</Menu.Item>
-        <Menu.Submenu.Content><WallpaperMenu entry={entry} /></Menu.Submenu.Content>
+        <Menu.Submenu.Content><WallpaperMenu entry={entry} work={work} /></Menu.Submenu.Content>
     </Menu.Submenu>
 }
 
 /** Where the file becomes the wallpaper: the Desktop or the sign-in screen, in the light theme or the dark one. Choosing sets it at once. */
-export function WallpaperMenu({ entry }: Readonly<{ entry: Entry }>) {
+export function WallpaperMenu({ entry, work }: Readonly<{ entry: Entry, work: Work }>) {
     return <Menu aria-label="Where it appears" size="small" onAction={key => {
         const [place, theme] = String(key).split(":")
-        void setWallpaper(entry, place as Place, theme as Theme)
+        work("Setting the wallpaper…", () => setWallpaper(entry, place as Place, theme as Theme))
     }}>
         {places.map(place => <Menu.Section key={place.id} id={place.id}>
             <Menu.Header>{place.name}</Menu.Header>

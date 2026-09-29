@@ -7,6 +7,7 @@ import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
 import { useFirstArrival } from "./readiness"
 import { besideThisWindow, openFilesWindow } from "./windows"
+import type { Work } from "./work"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
 import { openSettings } from "./settings"
@@ -60,6 +61,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const clipboard = useClipboard()
     const [renaming, setRenaming] = useState<string | null>(null)
     const status = useStatus()
+    const work: Work = (doing, change) => void status.run(doing, change)
     const upload = useRef<HTMLInputElement>(null)
     const all = folder.entries
     // Names starting with a dot are hidden, as on every system these files come from.
@@ -245,7 +247,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                         ? <Menu aria-label="Entries" size="small" onAction={action => run(String(action))}>
                             <Menu.Item id="open" disabled={chosen.length !== 1}><FolderOpen />Open</Menu.Item>
                             <Menu.Item id="window" disabled={chosen.length !== 1}><SquareArrowOutUpRight />Open in new window</Menu.Item>
-                            {chosen.length === 1 && wallpaperType(chosen[0]!) && <WallpaperSubmenu entry={chosen[0]!} />}
+                            {chosen.length === 1 && wallpaperType(chosen[0]!) && <WallpaperSubmenu entry={chosen[0]!} work={work} />}
                             <Menu.Separator />
                             <Menu.Item id="rename" disabled={chosen.length !== 1}><PencilLine />Rename</Menu.Item>
                             <Menu.Item id="duplicate"><CopyPlus />Duplicate</Menu.Item>
@@ -276,7 +278,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
             {at.file ? <>
                 {wallpaperType(at.file) && <DropdownMenu>
                     <DropdownMenu.Trigger depth="none" size="xsmall"><Wallpaper />Set as wallpaper<ChevronDown /></DropdownMenu.Trigger>
-                    <DropdownMenu.Content><WallpaperMenu entry={at.file} /></DropdownMenu.Content>
+                    <DropdownMenu.Content><WallpaperMenu entry={at.file} work={work} /></DropdownMenu.Content>
                 </DropdownMenu>}
                 <Button depth="none" size="xsmall" onPress={() => void openWindow(at.file!)}><SquareArrowOutUpRight />Open in new window</Button>
             </> : <>

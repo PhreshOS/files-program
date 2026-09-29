@@ -324,6 +324,7 @@ header [role="toolbar"],
 .panel-root { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-spacer { flex: 1 1 auto; }
 .panel-tree { min-height: 0; }
+.panel-reading { display: grid; place-items: center; padding: 1.5rem; }
 
 /* The shelf: below the tree, as tall as what it holds, up to two fifths of the panel; all of it
    takes drops, and while empty its words stand in its middle. */

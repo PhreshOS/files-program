@@ -47,6 +47,7 @@ async function setPanel(on: boolean) {
 export default function FilesSettings() {
     const [panel, setPanelShown] = useState<boolean | null>(null)
     const [problem, setProblem] = useState<string | null>(null)
+    const [changing, setChanging] = useState(false)
 
     useEffect(() => { void panelIsOn().then(setPanelShown) }, [])
     useFirstArrival(panel !== null)
@@ -54,6 +55,7 @@ export default function FilesSettings() {
     async function change(on: boolean) {
         setProblem(null)
         setPanelShown(on)
+        setChanging(true)
         try {
             await setPanel(on)
         }
@@ -61,11 +63,14 @@ export default function FilesSettings() {
             setPanelShown(!on)
             setProblem(error instanceof Error ? error.message : String(error))
         }
+        finally {
+            setChanging(false)
+        }
     }
 
     return <main className="settings">
         <h1 className="settings-title">Settings</h1>
-        <Switch checked={panel ?? false} disabled={panel === null} onChange={on => void change(on)}
+        <Switch checked={panel ?? false} disabled={panel === null || changing} onChange={on => void change(on)}
             label="Panel at the edge of the screen"
             description="Files waits at the edge of the screen and opens when you move the pointer there. It starts with the System while it is on." />
         {problem && <p className="settings-problem" role="alert">{problem}</p>}

@@ -17,6 +17,10 @@ type Gesture = {
     frame: number
 }
 
+function withoutSelection(event: Event) {
+    event.preventDefault()
+}
+
 /** How far a press must move before it draws a box instead of staying a press. */
 const threshold = 4
 
@@ -70,6 +74,7 @@ export default function useMarquee(selected: readonly string[], select: (paths: 
         const current = gesture.current
         if (!current) return
         cancelAnimationFrame(current.frame)
+        document.removeEventListener("selectstart", withoutSelection)
         gesture.current = null
         setBox(null)
     }
@@ -89,8 +94,10 @@ export default function useMarquee(selected: readonly string[], select: (paths: 
                 drawing: false, seen: new Map(), frame: 0
             }
             area.setPointerCapture(event.pointerId)
-            // The press draws a box; it must not select text on the way.
-            event.preventDefault()
+            // The press draws a box; it must not select text on the way. Only the selection is held
+            // back, not the press: the press still brings focus to Files, which tells the Desktop that
+            // whatever it had open, such as the Start menu, is left.
+            document.addEventListener("selectstart", withoutSelection)
         },
         onPointerMove(event: PointerEvent<HTMLElement>) {
             const current = gesture.current

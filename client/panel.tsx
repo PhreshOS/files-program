@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { context } from "@phreshos/client"
 import { useDesktopViewport, useSystemAppearance } from "@phreshos/react"
-import { Button, ContextMenu, DropdownMenu, Loading, Menu, ScrollArea, Tree, useDragAndDrop } from "@phreshos/react-ui"
+import { Button, ContextMenu, DropdownMenu, Loading, Menu, ScrollArea, Spinner, Tree, useDragAndDrop } from "@phreshos/react-ui"
 import { ChevronDown, Pin, PinOff, SquareArrowOutUpRight } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import { sortEntries, type Entry } from "./entries"
@@ -10,6 +10,7 @@ import EntryMenu, { type MenuPlace } from "./panel-menu"
 import { Arrival } from "./readiness"
 import Shelf from "./shelf"
 import { declaredWidth, openFilesWindow } from "./windows"
+import { useWork } from "./work"
 import { bring, dragItems, dropInto, dropOperation, type Transfer } from "./transfer"
 
 /** How wide the panel is, and how much of it stays on the screen while it waits. */
@@ -208,7 +209,9 @@ export default function Panel() {
     }
     const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name)
 
-    const transfer: Transfer = (incoming, into, operation) => void bring(incoming, into, operation).catch(() => undefined)
+    // What goes to the Server shows beside the folder until it settles.
+    const { doing, work } = useWork()
+    const transfer: Transfer = (incoming, into, operation) => work(operation === "copy" ? "Copying…" : "Moving…", () => bring(incoming, into, operation))
     const { dragAndDropHooks } = useDragAndDrop({
         getItems: keys => dragItems([...keys].map(String)),
         getAllowedDropOperations: () => ["move", "copy"],
@@ -239,10 +242,18 @@ export default function Panel() {
         const entries = listings.get(path) ?? []
         const count = shown.get(path) ?? part
         return <>
-            {entries.slice(0, count).map(entry => <Tree.Item key={entry.path} id={entry.path} textValue={entry.name} expandable={entry.kind === "folder"}>
-                <Tree.Content><FileIcon kind={entry.kind} mark={places.find(item => item.path === entry.path)?.mark} size={16} />{entry.name}</Tree.Content>
-                {entry.kind === "folder" && expanded.includes(entry.path) && renderFolder(entry.path)}
-            </Tree.Item>)}
+            {entries.slice(0, count).map(entry => {
+                // A folder read and found empty has nothing to open; one opened and still being read says so.
+                const listed = listings.get(entry.path)
+                const reading = entry.kind === "folder" && expanded.includes(entry.path) && !listed
+                return <Tree.Item key={entry.path} id={entry.path} textValue={entry.name} expandable={entry.kind === "folder" && listed?.length !== 0}>
+                    <Tree.Content>
+                        <FileIcon kind={entry.kind} mark={places.find(item => item.path === entry.path)?.mark} size={16} />{entry.name}
+                        {reading && <Spinner size="small" label={`Reading ${entry.name}`} />}
+                    </Tree.Content>
+                    {entry.kind === "folder" && expanded.includes(entry.path) && renderFolder(entry.path)}
+                </Tree.Item>
+            })}
             {entries.length > count && <Tree.LoadMore onLoadMore={() => showMore(path)} />}
         </>
     }
@@ -265,21 +276,25 @@ export default function Panel() {
                 </DropdownMenu.Content>
             </DropdownMenu>
             <span className="panel-spacer" />
+            {doing && <Spinner size="small" label={doing} />}
             <Button iconOnly depth="none" size="xsmall" aria-label="Open in Files" onPress={() => root && void openInFiles(root, rootName)}><SquareArrowOutUpRight /></Button>
             <Button iconOnly depth="none" size="xsmall" aria-label={pinned ? "Unpin" : "Keep open"} aria-pressed={pinned} onPress={() => setPinned(!pinned)}>{pinned ? <PinOff /> : <Pin />}</Button>
         </div>
         <ContextMenu>
             <ContextMenu.Trigger>
                 <ScrollArea className="panel-tree" onContextMenuCapture={event => menuUnder(event.target)} onDoubleClick={event => showFolderUnder(event.target)}>
-                    {root && <Tree aria-label={rootName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
-                        {renderFolder(root)}
-                    </Tree>}
+                    {/* A folder chosen for the tree shows once it has been read. */}
+                    {root && (listings.has(root)
+                        ? <Tree aria-label={rootName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
+                            {renderFolder(root)}
+                        </Tree>
+                        : <div className="panel-reading"><Spinner size="small" label={`Reading ${rootName}`} /></div>)}
                 </ScrollArea>
             </ContextMenu.Trigger>
             <ContextMenu.Content>
-                {menuFor && <EntryMenu entry={menuFor.entry} place={menuFor.place} clipboard={clipboard ?? null} onOpen={openEntry} />}
+                {menuFor && <EntryMenu entry={menuFor.entry} place={menuFor.place} clipboard={clipboard ?? null} onOpen={openEntry} work={work} />}
             </ContextMenu.Content>
         </ContextMenu>
-        <Shelf clipboard={clipboard ?? null} onOpen={openEntry} />
+        <Shelf clipboard={clipboard ?? null} onOpen={openEntry} work={work} />
     </Loading></nav>
 }

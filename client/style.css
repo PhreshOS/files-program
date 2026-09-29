@@ -306,6 +306,17 @@ header [role="toolbar"],
 .settings-title { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .settings-problem { margin: 0; font-size: 0.8125rem; color: var(--settings-problem, inherit); }
 
-/* The panel at the edge of the screen. */
-.panel { display: grid; gap: 0.25rem; align-content: start; padding: 0.75rem 0.625rem; height: 100%; box-sizing: border-box; }
-.panel-title { padding: 0.25rem 0.5rem 0.5rem; font-size: 1rem; font-weight: 600; }
+/* The panel at the edge of the screen; while it waits, it shows nothing but still catches the pointer. */
+.panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.25rem;
+    height: 100%;
+    padding: 0.625rem 0.5rem;
+    box-sizing: border-box;
+}
+.panel-waiting > * { visibility: hidden; }
+.panel-header { display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
+.panel-root { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-spacer { flex: 1 1 auto; }
+.panel-tree { min-height: 0; }

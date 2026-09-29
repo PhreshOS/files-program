@@ -1,6 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { context } from "@phreshos/client"
-import type { AppearanceTaskbar, DesktopSize } from "@phreshos/core"
 import { useDesktopViewport, useSystemAppearance } from "@phreshos/react"
 import { Button, ContextMenu, DropdownMenu, Loading, Menu, ScrollArea, Tree, useDragAndDrop } from "@phreshos/react-ui"
 import { ChevronDown, Pin, PinOff, SquareArrowOutUpRight } from "@phreshos/react-ui/icons"
@@ -54,24 +53,17 @@ function usePanelPlacement(open: boolean, side: Side) {
     const shown = useRef<boolean | null>(null)
 
     useEffect(() => {
-        const geometry = panelBox(open, side, size, spacing, taskbar)
+        const inset = { top: spacing, bottom: spacing }
+        if (!taskbar.overlay && (taskbar.position === "top" || taskbar.position === "bottom")) inset[taskbar.position] += taskbar.size + spacing
+        // Positions count from the Desktop's center; open, it stands the spacing away from the edge.
+        const away = open ? spacing : edgeWidth - width
+        const x = side === "left" ? -size.width / 2 + away : size.width / 2 - away - width
+        const geometry = { x, y: inset.top - size.height / 2, width, height: size.height - inset.top - inset.bottom }
         const moving = shown.current !== null && shown.current !== open
         shown.current = open
         const presentation = moving ? context.presentation.transaction() : context.presentation
         void Promise.all([presentation.setGeometry(geometry), presentation.setSurface(open)])
     }, [open, side, size.width, size.height, spacing, taskbar.position, taskbar.size, taskbar.overlay])
-}
-
-/**
- * The panel's box, open or waiting. Positions count from the Desktop's center; open, it stands the
- * spacing away from the edge.
- */
-function panelBox(open: boolean, side: Side, size: DesktopSize, spacing: number, taskbar: AppearanceTaskbar) {
-    const inset = { top: spacing, bottom: spacing }
-    if (!taskbar.overlay && (taskbar.position === "top" || taskbar.position === "bottom")) inset[taskbar.position] += taskbar.size + spacing
-    const away = open ? spacing : edgeWidth - width
-    const x = side === "left" ? -size.width / 2 + away : size.width / 2 - away - width
-    return { x, y: inset.top - size.height / 2, width, height: size.height - inset.top - inset.bottom }
 }
 
 /**
@@ -203,16 +195,16 @@ export default function Panel() {
         if (entry?.kind !== "folder") return
         showFolder(entry.path)
     }
-    // A Files window opens beside the open panel, on the plane the owner is looking at: the panel
-    // counts from the Desktop's center, windows from the plane's zero.
-    const viewport = useDesktopViewport()
-    const { spacing, taskbar } = useSystemAppearance()
+    // A Files window opens beside the panel as it is drawn, on the plane the owner is looking at: the
+    // drawing counts from the Desktop's center, windows from the plane's zero.
+    const { offset } = useDesktopViewport()
+    const { spacing } = useSystemAppearance()
     async function openInFiles(path: string, name: string) {
-        const box = panelBox(true, side, viewport.size, spacing, taskbar)
+        const [drawn, drawnSize] = await Promise.all([context.presentation.position(), context.presentation.size()])
         // On the right, the window ends beside the panel, so its width must be known.
         const windowWidth = side === "right" ? await declaredWidth() : 0
-        const x = windowWidth === null ? null : side === "left" ? box.x + box.width + spacing : box.x - spacing - windowWidth
-        await openFilesWindow(path, name, x === null ? null : { x: viewport.offset.x + x, y: viewport.offset.y + box.y })
+        const x = windowWidth === null ? null : side === "left" ? drawn.x + drawnSize.width + spacing : drawn.x - spacing - windowWidth
+        await openFilesWindow(path, name, x === null ? null : { x: offset.x + x, y: offset.y + drawn.y })
     }
     const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name)
 

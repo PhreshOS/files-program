@@ -1,5 +1,5 @@
 import { context } from "@phreshos/client"
-import type { Position } from "@phreshos/core"
+import { parseRelativeValue, type Position, type Value } from "@phreshos/core"
 
 /** How far a new Files window stands from the Files window that opened it, down and across. */
 const step = 32
@@ -14,10 +14,24 @@ export async function openFilesWindow(path: string, title: string, position: Pos
     await program.createProcess({ client: { title, ...(position ? { position } : {}) }, options: { path } })
 }
 
-/** A little down and across from this window, when its position is in pixels. */
+/**
+ * A little down and across from this window. Its position may be in pixels or in views, such as
+ * "100% - 262" one view along; either way the step is added in pixels.
+ */
 export async function besideThisWindow(): Promise<Position | null> {
     const { x, y } = await context.window.position()
-    return typeof x === "number" && typeof y === "number" ? { x: x + step, y: y + step } : null
+    const shiftedX = shifted(x), shiftedY = shifted(y)
+    return shiftedX === null || shiftedY === null ? null : { x: shiftedX, y: shiftedY }
+}
+
+/** A position value moved on by the step, in the same form it came in. */
+function shifted(value: Value): Value | null {
+    const parsed = parseRelativeValue(value)
+    if (!parsed) return null
+    const pixels = parsed.pixels + step
+    if (parsed.relative === 0) return pixels
+    const share = `${parsed.relative * 100}%`
+    return pixels === 0 ? share : `${share} ${pixels < 0 ? "-" : "+"} ${Math.abs(pixels)}`
 }
 
 /** The width Files declares for its windows, when it is in pixels. */

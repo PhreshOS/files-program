@@ -213,6 +213,14 @@ header [role="toolbar"],
     border: 0;
 }
 
+/* A document as tall as its content fills the room and scrolls in it. */
+.preview-scroll {
+    align-self: stretch;
+    justify-self: stretch;
+    min-height: 0;
+}
+.preview-scroll .preview-document { display: block; }
+
 /* The text view fills the room; CodeMirror scrolls inside it. */
 .text-view {
     align-self: stretch;

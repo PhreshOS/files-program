@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react"
-import { ProgressBar, useAppearance, useThemedValue } from "@phreshos/react-ui"
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { ProgressBar, ScrollArea, useAppearance, useThemedValue } from "@phreshos/react-ui"
 import { marked } from "marked"
 import FileIcon from "./file-icon"
 import { extensionOf, formatModified, formatSize, kindNames, mediaTypeOf, type Entry } from "./entries"
@@ -65,14 +65,15 @@ function Media({ url, type, name }: Readonly<{ url: string, type: string, name: 
 }
 
 /**
- * A page or a Markdown document as it reads. It lives in a frame of its own with no origin: a page may
- * run its scripts there, but reaches nothing of Files or the Desktop; Markdown runs none, and its
- * links open outside.
+ * A page or a Markdown document as it reads, in a frame of its own. A page may run its scripts there,
+ * but it has no origin, so it reaches nothing of Files or the Desktop, and it scrolls itself. Markdown
+ * runs no scripts and its links open outside; its frame is as tall as the document, and Files scrolls
+ * it the way it scrolls everything else.
  */
 function Page({ text, form, name }: Readonly<{ text: string, form: "markdown" | "page", name: string }>) {
     const colors = useThemedValue(useAppearance().colors)
     const document = useMemo(() => form === "page" ? text : `<!doctype html><meta charset="utf-8"><base target="_blank"><style>
-        :root { color-scheme: light dark; }
+        :root { color-scheme: light dark; overflow: hidden; }
         body { margin: 0 auto; max-width: 46rem; padding: 1.5rem 1.75rem 3rem; color: ${colors.foreground}; background: transparent; font: 0.9375rem/1.65 system-ui, sans-serif; overflow-wrap: anywhere; }
         h1, h2, h3, h4 { line-height: 1.25; margin: 1.6em 0 0.6em; }
         h1 { font-size: 1.75rem; } h2 { font-size: 1.375rem; } h3 { font-size: 1.125rem; }
@@ -87,8 +88,37 @@ function Page({ text, form, name }: Readonly<{ text: string, form: "markdown" | 
         img { max-width: 100%; }
         hr { border: 0; border-top: 1px solid color-mix(in oklab, ${colors.foreground} 15%, transparent); }
     </style>${marked.parse(text, { async: false })}`, [text, form, colors])
-    return <iframe className="preview-document" title={name} srcDoc={document}
-        sandbox={form === "page" ? "allow-scripts" : "allow-popups allow-popups-to-escape-sandbox"} />
+    if (form === "page") return <iframe className="preview-document" title={name} srcDoc={document} sandbox="allow-scripts" />
+    return <Document document={document} name={name} />
+}
+
+/**
+ * A document that runs no scripts, in a frame as tall as its content, which grows as its pictures
+ * arrive. Files may read the frame's height because nothing runs inside it.
+ */
+function Document({ document, name }: Readonly<{ document: string, name: string }>) {
+    const frame = useRef<HTMLIFrameElement>(null)
+    const [height, setHeight] = useState(0)
+    useEffect(() => {
+        const element = frame.current!
+        let observer: ResizeObserver | undefined
+        const measure = () => {
+            const root = element.contentDocument?.documentElement
+            if (!root) return
+            observer?.disconnect()
+            observer = new ResizeObserver(() => setHeight(root.scrollHeight))
+            observer.observe(root)
+        }
+        element.addEventListener("load", measure)
+        return () => {
+            element.removeEventListener("load", measure)
+            observer?.disconnect()
+        }
+    }, [])
+    return <ScrollArea className="preview-scroll">
+        <iframe ref={frame} className="preview-document" title={name} srcDoc={document} style={{ height }}
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" />
+    </ScrollArea>
 }
 
 function useContent(entry: Entry): Loaded {

@@ -10,8 +10,9 @@ export default defineConfig({
     keywords: ["files", "folders", "explorer"],
     // Drawn from icon.svg: the apricot pocket holding two green leaves, the folder Files shows inside.
     icon: "icon.png",
-    // Setting a file as the wallpaper uploads it and changes the Appearance.
-    permissions: { uploads: true, appearance: true },
+    // Setting a file as the wallpaper uploads it and changes the Appearance; the panel at the edge
+    // of the screen stays above every window, in the `over` layer.
+    permissions: { uploads: true, appearance: true, layers: ["over"] },
     buildCommand: "vite-node scripts/build.ts",
     // One Server reaches the machine's files directly with Node.js, as a worker. It runs once, in the
     // Process named "server"; every window is a Client that connects to it, so windows start without it.

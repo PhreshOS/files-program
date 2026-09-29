@@ -300,3 +300,12 @@ header [role="toolbar"],
 @media (max-width: 640px) {
     .search { flex-basis: 8rem; }
 }
+
+/* The settings: one small window, one decision per line. */
+.settings { display: grid; gap: 1rem; align-content: start; padding: 1.25rem 1.5rem; }
+.settings-title { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.settings-problem { margin: 0; font-size: 0.8125rem; color: var(--settings-problem, inherit); }
+
+/* The panel at the edge of the screen. */
+.panel { display: grid; gap: 0.25rem; align-content: start; padding: 0.75rem 0.625rem; height: 100%; box-sizing: border-box; }
+.panel-title { padding: 0.25rem 0.5rem 0.5rem; font-size: 1rem; font-weight: 600; }

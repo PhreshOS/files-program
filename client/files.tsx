@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
+import { openSettings } from "./settings"
 import { bring, dragItems, dropInto, dropOperation, entriesType, fromDataTransfer, fromFiles, type Incoming, type Transfer } from "./transfer"
 
 type View = "list" | "grid"
@@ -282,6 +283,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                     {showHidden ? `Hide ${hidden} hidden` : `Show ${hidden} hidden`}
                 </Button>}
             </>}
+            <Button iconOnly depth="none" size="xsmall" aria-label="Settings" onPress={() => void openSettings()}><Settings /></Button>
         </AppLayout.Footer>
     </AppLayout>
 }

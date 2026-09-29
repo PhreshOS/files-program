@@ -4,6 +4,8 @@ import { Button, DocumentTheme, ProgressBar, UIProvider } from "@phreshos/react-
 import { StrictMode, useEffect, useState } from "react"
 import client from "react-dom/client"
 import Files from "./files"
+import Panel from "./panel"
+import FilesSettings from "./settings"
 import { entryAt, homePath } from "./files-server"
 import type { Entry } from "./entries"
 import "./style.css"
@@ -20,12 +22,25 @@ client.createRoot(document.getElementById("files")!).render(<StrictMode>
 function Themed() {
     return <UIProvider appearance={useSystemAppearance()} preferences={useDesktopPreferences()}>
         <DocumentTheme />
-        <Home />
+        <View />
     </UIProvider>
 }
 
 function Opening() {
     return <div className="opening"><ProgressBar indeterminate label="Opening Files…" /></div>
+}
+
+/**
+ * What this Files window shows, by its `view` option: the settings, the panel at the edge of the
+ * screen, or the files themselves.
+ */
+function View() {
+    const [view, setView] = useState<string | null | undefined>(undefined)
+    useEffect(() => { void context.options("view").then(value => setView(value ?? null)) }, [])
+    if (view === undefined) return <Opening />
+    if (view === "settings") return <FilesSettings />
+    if (view === "panel") return <Panel />
+    return <Home />
 }
 
 /**

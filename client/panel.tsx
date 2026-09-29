@@ -14,9 +14,8 @@ import { bring, dragItems, dropInto, dropOperation, type Transfer } from "./tran
 const width = 300
 const edgeWidth = 6
 
-/** How long the pointer rests on the edge before the panel opens, and how long it may be away before it closes. */
+/** How long the pointer rests on the edge before the panel opens; leaving it closes it at once. */
 const openDelay = 150
-const closeDelay = 400
 
 /** How long a drag is held at the edge before the panel opens for it: the Desktop's own hold. */
 const dragHold = 800
@@ -63,22 +62,26 @@ function usePanelPlacement(open: boolean, side: Side) {
 }
 
 /**
- * Whether the panel is open: the pointer resting on the edge opens it, leaving it closes it after a
- * moment, and a drag held there opens it too. Pinned, it stays open.
+ * Whether the panel is open: the pointer resting on the edge opens it, leaving it closes it at once,
+ * and a drag held there opens it too. Pinned, it stays open.
  */
 function useOpening(pinned: boolean, side: Side) {
     const [open, setOpen] = useState(pinned)
     const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-    const later = (next: boolean, delay: number) => {
+    const openSoon = () => {
         clearTimeout(timer.current)
-        timer.current = setTimeout(() => setOpen(next), delay)
+        timer.current = setTimeout(() => setOpen(true), openDelay)
     }
-    const onEnter = useEffectEvent(() => later(true, openDelay))
+    const close = () => {
+        clearTimeout(timer.current)
+        setOpen(false)
+    }
+    const onEnter = useEffectEvent(openSoon)
     // The pointer that leaves toward the screen edge is in the spacing beside the panel, still at the
     // edge that opened it: the panel stays.
     const onLeave = useEffectEvent((event: PointerEvent) => {
         const towardEdge = side === "left" ? event.clientX <= 0 : event.clientX >= window.innerWidth - 1
-        if (!pinned && !towardEdge) later(false, closeDelay)
+        if (!pinned && !towardEdge) close()
     })
     const onDrag = useEffectEvent(() => {
         // A drag keeps repeating `dragover` while it stays; the hold starts with the first one.
@@ -89,7 +92,7 @@ function useOpening(pinned: boolean, side: Side) {
     useEffect(() => {
         clearTimeout(timer.current)
         if (pinned) setOpen(true)
-        else if (!document.documentElement.matches(":hover")) later(false, closeDelay)
+        else if (!document.documentElement.matches(":hover")) close()
     }, [pinned])
 
     useEffect(() => {
@@ -166,6 +169,14 @@ export default function Panel() {
         if (entry) setMenuFor({ entry, place: "tree" })
         else if (root) setMenuFor({ entry: { path: root, name: rootName, kind: "folder", modified: 0 }, place: "root" })
     }
+    // A folder pressed twice becomes the one the tree shows.
+    function showFolderUnder(target: EventTarget) {
+        const row = target instanceof Element ? target.closest("[role=row][data-key]") : null
+        const entry = row && entries.get(row.getAttribute("data-key")!)
+        if (entry?.kind !== "folder") return
+        setRoot(entry.path)
+        setExpanded([])
+    }
     const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name)
 
     const transfer: Transfer = (incoming, into, operation) => void bring(incoming, into, operation).catch(() => undefined)
@@ -219,7 +230,7 @@ export default function Panel() {
         </div>
         <ContextMenu>
             <ContextMenu.Trigger>
-                <ScrollArea className="panel-tree" onContextMenuCapture={event => menuUnder(event.target)}>
+                <ScrollArea className="panel-tree" onContextMenuCapture={event => menuUnder(event.target)} onDoubleClick={event => showFolderUnder(event.target)}>
                     {root && <Tree aria-label={rootName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
                         {renderFolder(root)}
                     </Tree>}

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
-import { context } from "@phreshos/client"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
 import { useFirstArrival } from "./readiness"
+import { besideThisWindow, openFilesWindow } from "./windows"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
 import { openSettings } from "./settings"
@@ -558,13 +558,9 @@ function usePlaces(home: string) {
     return all.filter(place => (found ?? [home]).includes(place.path))
 }
 
-/**
- * Opens a folder or a file in a Files window of its own: a Process with only a Client, told where
- * to start by its options. Like every Files window, it reads through the one Files Server.
- */
+/** Opens a folder or a file in a Files window of its own, a little down and across from this one. */
 async function openWindow(entry: Entry) {
-    const program = await context.program()
-    await program.createProcess({ client: { title: entry.name }, options: { path: entry.path } })
+    await openFilesWindow(entry.path, entry.name, await besideThisWindow())
 }
 
 /**

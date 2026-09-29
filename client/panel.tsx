@@ -23,6 +23,12 @@ const dragHold = 800
 
 type Side = "left" | "right"
 
+/** How many entries of a folder the tree shows at first, and how many more each time. */
+const part = 100
+
+/** Where the folder the tree shows is remembered, in the Program's store. */
+const rootKey = "panel.root"
+
 type Place = Readonly<{ path: string, name: string, mark: FolderMark }>
 
 const placesOf = (home: string): readonly Place[] => [
@@ -150,7 +156,22 @@ export default function Panel() {
     const [found, setFound] = useState<readonly string[] | null>(null)
     const [root, setRoot] = useState<string | null>(null)
     const [expanded, setExpanded] = useState<readonly string[]>([])
-    useEffect(() => { void homePath().then(path => { setHome(path); setRoot(current => current ?? path) }) }, [])
+    // The folder the tree shows is remembered, so the panel opens on it again, even after the System restarts.
+    function showFolder(path: string) {
+        setRoot(path)
+        setExpanded([])
+        void context.program().then(program => program.store.set(rootKey, path))
+    }
+    useEffect(() => {
+        void (async () => {
+            const program = await context.program()
+            const [path, remembered] = await Promise.all([homePath(), program.store.get<string>(rootKey)])
+            // A remembered folder that is gone gives way to the home folder.
+            const found = remembered ? await existing([remembered]).catch(() => []) : []
+            setHome(path)
+            setRoot(found.includes(remembered!) ? remembered! : path)
+        })()
+    }, [])
     const places = useMemo(() => home ? placesOf(home) : [], [home])
     useEffect(() => { if (places.length) void existing(places.map(place => place.path)).then(setFound) }, [places])
 
@@ -175,8 +196,7 @@ export default function Panel() {
         const row = target instanceof Element ? target.closest("[role=row][data-key]") : null
         const entry = row && entries.get(row.getAttribute("data-key")!)
         if (entry?.kind !== "folder") return
-        setRoot(entry.path)
-        setExpanded([])
+        showFolder(entry.path)
     }
     const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name)
 
@@ -203,11 +223,20 @@ export default function Panel() {
         else void openInFiles(entry.path, entry.name)
     }
 
+    // A long folder shows its entries in parts, more each time scrolling nears the last one shown.
+    const [shown, setShown] = useState<ReadonlyMap<string, number>>(new Map())
+    const showMore = (path: string) => setShown(current => new Map(current).set(path, (current.get(path) ?? part) + part))
+
     function renderFolder(path: string): React.ReactNode {
-        return (listings.get(path) ?? []).map(entry => <Tree.Item key={entry.path} id={entry.path} textValue={entry.name} expandable={entry.kind === "folder"}>
-            <Tree.Content><FileIcon kind={entry.kind} mark={places.find(item => item.path === entry.path)?.mark} size={16} />{entry.name}</Tree.Content>
-            {entry.kind === "folder" && expanded.includes(entry.path) && renderFolder(entry.path)}
-        </Tree.Item>)
+        const entries = listings.get(path) ?? []
+        const count = shown.get(path) ?? part
+        return <>
+            {entries.slice(0, count).map(entry => <Tree.Item key={entry.path} id={entry.path} textValue={entry.name} expandable={entry.kind === "folder"}>
+                <Tree.Content><FileIcon kind={entry.kind} mark={places.find(item => item.path === entry.path)?.mark} size={16} />{entry.name}</Tree.Content>
+                {entry.kind === "folder" && expanded.includes(entry.path) && renderFolder(entry.path)}
+            </Tree.Item>)}
+            {entries.length > count && <Tree.LoadMore onLoadMore={() => showMore(path)} />}
+        </>
     }
 
     // The panel shows once its folder, the places, the clipboard, and the shelf have arrived.
@@ -219,7 +248,7 @@ export default function Panel() {
                     <FileIcon kind="folder" mark={place?.mark} size={16} /><span className="panel-root">{rootName}</span><ChevronDown />
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
-                    <Menu aria-label="Show a folder" size="small" onAction={key => { setRoot(String(key)); setExpanded([]) }}>
+                    <Menu aria-label="Show a folder" size="small" onAction={key => showFolder(String(key))}>
                         {places.filter(item => found?.includes(item.path)).map(item => <Menu.Item key={item.path} id={item.path}>
                             <FileIcon kind="folder" mark={item.mark} />{item.name}
                         </Menu.Item>)}

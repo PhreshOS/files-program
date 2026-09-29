@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Button, Surface, Tree, useDragAndDrop } from "@phreshos/react-ui"
-import { ListX, X } from "@phreshos/react-ui/icons"
+import { X } from "@phreshos/react-ui/icons"
 import FileIcon from "./file-icon"
 import type { Entry } from "./entries"
 import { followShelf, shelfFolder, shelve, unshelve } from "./files-server"
@@ -30,13 +30,8 @@ export default function Shelf({ onOpen }: Readonly<{ onOpen: (entry: Entry) => v
     })
 
     return <section aria-label="Shelf" className="shelf">
-        <div className="panel-header">
-            <span className="shelf-title">Shelf</span>
-            <span className="panel-spacer" />
-            {entries.length > 0 && <Button iconOnly depth="none" size="xsmall" aria-label="Clear the shelf" onPress={() => void unshelve(entries.map(entry => entry.path))}><ListX /></Button>}
-        </div>
-        {/* A well the entries rest in, pressed into the panel. */}
-        <Surface depth="recessed" className="shelf-well">
+        {/* The same container as the content of a Files window. */}
+        <Surface material="extended" radius="medium" className="shelf-well">
             <Tree aria-label="Shelf" size="small" dragAndDropHooks={dragAndDropHooks}
                 onAction={key => { const entry = entries.find(item => item.path === key); if (entry) onOpen(entry) }}
                 renderEmptyState={() => <p className="shelf-empty">Drop files here to keep them at hand.</p>}>

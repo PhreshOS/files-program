@@ -20,6 +20,8 @@ const closeDelay = 400
 /** How long a drag is held at the edge before the panel opens for it: the Desktop's own hold. */
 const dragHold = 800
 
+type Side = "left" | "right"
+
 type Place = Readonly<{ path: string, name: string, mark: FolderMark }>
 
 const placesOf = (home: string): readonly Place[] => [
@@ -34,23 +36,23 @@ const placesOf = (home: string): readonly Place[] => [
 ]
 
 /**
- * Where the panel stands: against the edge the Taskbar does not use, as tall as the space Windows
- * get. Waiting, it lies beyond that edge with only a thin strip left on the screen, which catches
- * the pointer; opening slides it in whole, with the Desktop's Surface behind it. It keeps its width
- * either way, so the motion only moves it. It follows the Desktop when it changes, without motion.
+ * Where the panel stands: on the edge the Taskbar does not use, as tall as the space Windows get,
+ * at the Appearance spacing from the edge like everything else on the Desktop. Waiting, it lies
+ * beyond that edge with only a thin strip left on the screen, which catches the pointer; opening
+ * slides it in whole, with the Desktop's Surface behind it. It keeps its width either way, so the
+ * motion only moves it. It follows the Desktop when it changes, without motion.
  */
-function usePanelPlacement(open: boolean) {
+function usePanelPlacement(open: boolean, side: Side) {
     const { size } = useDesktopViewport()
     const { spacing, taskbar } = useSystemAppearance()
-    const side = taskbar.position === "left" ? "right" : "left"
     const shown = useRef<boolean | null>(null)
 
     useEffect(() => {
         const inset = { top: spacing, bottom: spacing }
         if (!taskbar.overlay && (taskbar.position === "top" || taskbar.position === "bottom")) inset[taskbar.position] += taskbar.size + spacing
-        // Positions count from the Desktop's center.
-        const hidden = open ? 0 : width - edgeWidth
-        const x = side === "left" ? -size.width / 2 - hidden : size.width / 2 - width + hidden
+        // Positions count from the Desktop's center; open, it stands the spacing away from the edge.
+        const away = open ? spacing : edgeWidth - width
+        const x = side === "left" ? -size.width / 2 + away : size.width / 2 - away - width
         const geometry = { x, y: inset.top - size.height / 2, width, height: size.height - inset.top - inset.bottom }
         const moving = shown.current !== null && shown.current !== open
         shown.current = open
@@ -63,7 +65,7 @@ function usePanelPlacement(open: boolean) {
  * Whether the panel is open: the pointer resting on the edge opens it, leaving it closes it after a
  * moment, and a drag held there opens it too. Pinned, it stays open.
  */
-function useOpening(pinned: boolean) {
+function useOpening(pinned: boolean, side: Side) {
     const [open, setOpen] = useState(pinned)
     const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
     const later = (next: boolean, delay: number) => {
@@ -71,7 +73,12 @@ function useOpening(pinned: boolean) {
         timer.current = setTimeout(() => setOpen(next), delay)
     }
     const onEnter = useEffectEvent(() => later(true, openDelay))
-    const onLeave = useEffectEvent(() => { if (!pinned) later(false, closeDelay) })
+    // The pointer that leaves toward the screen edge is in the spacing beside the panel, still at the
+    // edge that opened it: the panel stays.
+    const onLeave = useEffectEvent((event: PointerEvent) => {
+        const towardEdge = side === "left" ? event.clientX <= 0 : event.clientX >= window.innerWidth - 1
+        if (!pinned && !towardEdge) later(false, closeDelay)
+    })
     const onDrag = useEffectEvent(() => {
         // A drag keeps repeating `dragover` while it stays; the hold starts with the first one.
         if (!open && timer.current === undefined) timer.current = setTimeout(() => { timer.current = undefined; setOpen(true) }, dragHold)
@@ -87,7 +94,7 @@ function useOpening(pinned: boolean) {
     useEffect(() => {
         const root = document.documentElement
         const enter = () => onEnter()
-        const leave = () => onLeave()
+        const leave = (event: PointerEvent) => onLeave(event)
         const drag = () => onDrag()
         root.addEventListener("pointerenter", enter)
         root.addEventListener("pointerleave", leave)
@@ -129,8 +136,10 @@ async function openInFiles(path: string, name: string) {
  */
 export default function Panel() {
     const [pinned, setPinned] = useState(false)
-    const open = useOpening(pinned)
-    usePanelPlacement(open)
+    // The panel keeps to the edge the Taskbar does not use.
+    const side: Side = useSystemAppearance().taskbar.position === "left" ? "right" : "left"
+    const open = useOpening(pinned, side)
+    usePanelPlacement(open, side)
 
     const [home, setHome] = useState<string | null>(null)
     const [found, setFound] = useState<readonly string[]>([])

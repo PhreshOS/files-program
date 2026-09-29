@@ -321,10 +321,9 @@ header [role="toolbar"],
 .panel-spacer { flex: 1 1 auto; }
 .panel-tree { min-height: 0; }
 
-/* The shelf: below the tree, as tall as what it holds, up to a third of the panel. */
-.shelf { display: grid; gap: 0.25rem; padding-top: 0.5rem; }
-.shelf-title { padding-inline: 0.5rem; font-weight: 600; }
-.shelf-well { max-height: 33vh; min-height: 3.5rem; overflow: auto; padding: 0.25rem; }
+/* The shelf: below the tree, as tall as what it holds, up to two fifths of the panel. */
+.shelf { padding-top: 0.5rem; }
+.shelf-well { max-height: 40vh; min-height: 6rem; overflow: auto; padding: 0.375rem; }
 .shelf-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shelf-remove { visibility: hidden; }
 [role="row"]:hover .shelf-remove, [role="row"][data-focus-visible] .shelf-remove { visibility: visible; }

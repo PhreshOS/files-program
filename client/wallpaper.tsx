@@ -1,22 +1,18 @@
 import { context, system } from "@phreshos/client"
 import { Menu } from "@phreshos/react-ui"
 import { Wallpaper } from "@phreshos/react-ui/icons"
-import type { Entry } from "./entries"
-import { readFile } from "./folders"
+import { mediaTypeOf, type Entry } from "./entries"
+import { readFile } from "./files-server"
 
-/** What a wallpaper may be, by the file's name, and the most the System takes. */
-const wallpaperTypes: Readonly<Record<string, string>> = {
-    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", avif: "image/avif", svg: "image/svg+xml", bmp: "image/bmp",
-    mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg", ogv: "video/ogg",
-    html: "text/html", htm: "text/html"
-}
+/** What a wallpaper may be: a picture, a video the browser plays everywhere, or a page; and the most the System takes. */
+const wallpaperVideos = new Set(["video/mp4", "video/webm", "video/ogg"])
 const wallpaperLimit = 50 * 1024 * 1024
 
 /** The type a file would have as a wallpaper, or null when it cannot be one. */
 export function wallpaperType(entry: Entry) {
-    const dot = entry.name.lastIndexOf(".")
-    const type = dot > 0 ? wallpaperTypes[entry.name.slice(dot + 1).toLowerCase()] : undefined
-    return type && entry.kind !== "folder" && (entry.size ?? 0) <= wallpaperLimit ? type : null
+    const type = entry.kind === "folder" ? undefined : mediaTypeOf(entry.name)
+    const fits = type !== undefined && (type.startsWith("image/") || wallpaperVideos.has(type) || type === "text/html")
+    return fits && (entry.size ?? 0) <= wallpaperLimit ? type : null
 }
 
 type Place = "desktopWallpaper" | "signInWallpaper"

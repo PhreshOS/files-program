@@ -1,7 +1,8 @@
+import { basename, dirname } from "node:path"
 import { context } from "@phreshos/server"
 import { z } from "zod"
+import { clipboardHolder } from "./clipboard"
 import { entryAt, existingFolders, home, listFolder, readFile } from "./folders"
-import { basename, dirname } from "node:path"
 import { copyEntries, createFile, createFolder, moveEntries, renameEntry, trashEntries, writeNewFile } from "./operations"
 import { taskList } from "./tasks"
 import { folderWatch } from "./watch"
@@ -14,6 +15,9 @@ const watch = folderWatch(path => context.publish("folder.changed", { path }))
 
 /** The long operations every window shows, announced as they move. */
 const tasks = taskList(list => context.publish("tasks.changed", list))
+
+/** What was copied or cut, announced to every window when it changes. */
+const clipboard = clipboardHolder(held => context.publish("clipboard.changed", held))
 
 /** Runs one change and announces the folders it changed. */
 async function change<Result extends { changed: readonly string[] }>(run: Promise<Result>) {
@@ -35,12 +39,14 @@ async function task<Result>(folders: readonly string[], ...[kind, title, unit, o
     }
 }
 
-/** What a task does to some entries, in words: one by its name, several by their number. */
-function entriesIn(paths: readonly string[]) {
-    return paths.length === 1 ? `“${basename(paths[0]!)}”` : `${paths.length} items`
-}
+/** A name as a task's title quotes it. */
+const quoted = (name: string) => `“${name}”`
 
-const named = (path: string) => `“${basename(path) || "/"}”`
+/** An entry or a folder in a task's title, by its name. */
+const named = (path: string) => quoted(basename(path) || "/")
+
+/** Some entries in a task's title: one by its name, several by their number. */
+const entriesIn = (paths: readonly string[]) => paths.length === 1 ? named(paths[0]!) : `${paths.length} items`
 
 /** The home folder of the user running PhreshOS, where Files opens. */
 context.answer("home", () => home())
@@ -106,28 +112,30 @@ function downloading(content: ReadableStream<Uint8Array>, download: ReturnType<t
 
 /** A new folder or an empty file in a folder, under a free name. */
 context.answer("folder.create", ({ payload }) => {
-    const { parent, name } = z.object({ parent: absolutePath, name: z.string().optional() }).parse(payload)
-    return change(createFolder(parent, name))
+    const { folder, name } = z.object({ folder: absolutePath, name: z.string().optional() }).parse(payload)
+    return change(createFolder(folder, name))
 })
 context.answer("file.create", ({ payload }) => {
-    const { parent, name } = z.object({ parent: absolutePath, name: z.string().optional() }).parse(payload)
-    return change(createFile(parent, name))
+    const { folder, name } = z.object({ folder: absolutePath, name: z.string().optional() }).parse(payload)
+    return change(createFile(folder, name))
 })
 
 /** A new file written from a stream, such as one brought from the owner's own device. */
 context.answer("file.write", ({ payload }) => {
     const { folder, name, size, content } = z.object({ folder: absolutePath, name: z.string(), size: z.number().int().nonnegative().optional(), content: z.instanceof(ReadableStream) }).parse(payload)
-    return task([folder], "upload", `Uploading “${name}” to ${named(folder)}`, "bytes", progress => {
+    return task([folder], "upload", `Uploading ${quoted(name)} to ${named(folder)}`, "bytes", progress => {
         if (size !== undefined) progress.measured?.(size)
         return writeNewFile(folder, name, content as ReadableStream<Uint8Array>, progress)
     })
 })
 
+/** Another name for an entry, in its folder. */
 context.answer("entry.rename", ({ payload }) => {
     const { path, name } = z.object({ path: absolutePath, name: z.string() }).parse(payload)
     return change(renameEntry(path, name))
 })
 
+/** Copying and moving entries are tasks: what they touched is announced however they end. */
 function copy(from: readonly string[], destination: string) {
     return task([destination], "copy", `Copying ${entriesIn(from)} to ${named(destination)}`, "bytes", progress => copyEntries(from, destination, progress))
 }
@@ -146,6 +154,7 @@ context.answer("entries.move", ({ payload }) => {
     return move(request.paths, request.destination)
 })
 
+/** Entries moved to the machine's Trash, as a task. */
 context.answer("entries.trash", ({ payload }) => {
     const from = z.object({ paths }).parse(payload).paths
     return task(from.map(dirname), "trash", `Moving ${entriesIn(from)} to the Trash`, "items", progress => trashEntries(from, progress))
@@ -160,29 +169,23 @@ context.answer("tasks.stop", ({ payload }) => { tasks.stop(z.object({ id: z.stri
 /** Lets go of a failed task, once its problem has been seen. */
 context.answer("tasks.dismiss", ({ payload }) => { tasks.dismiss(z.object({ id: z.string() }).parse(payload).id) })
 
-/**
- * What was copied or cut, kept here so every Files window pastes the same thing. A cut is pasted once:
- * the entries have moved, and nothing is left to paste.
- */
-type Clipboard = Readonly<{ mode: "copy" | "cut", paths: readonly string[] }> | null
-let clipboard: Clipboard = null
-
-function setClipboard(next: Clipboard) {
-    clipboard = next
-    context.publish("clipboard.changed", clipboard)
-}
-
-context.answer("clipboard.get", () => clipboard)
+/** What was copied or cut. */
+context.answer("clipboard.get", () => clipboard.get())
 
 context.answer("clipboard.set", ({ payload }) => {
-    setClipboard(z.object({ mode: z.enum(["copy", "cut"]), paths }).nullable().parse(payload))
+    clipboard.set(z.object({ mode: z.enum(["copy", "cut"]), paths }).nullable().parse(payload))
 })
 
+/**
+ * Pastes into a folder: a copy as often as wanted; a cut once, since its entries have moved and
+ * nothing is left to paste.
+ */
 context.answer("clipboard.paste", async ({ payload }) => {
     const { destination } = z.object({ destination: absolutePath }).parse(payload)
-    if (!clipboard) return { paths: [], changed: [] }
-    if (clipboard.mode === "copy") return copy(clipboard.paths, destination)
-    const result = await move(clipboard.paths, destination)
-    setClipboard(null)
+    const held = clipboard.get()
+    if (!held) return { paths: [] }
+    if (held.mode === "copy") return copy(held.paths, destination)
+    const result = await move(held.paths, destination)
+    clipboard.set(null)
     return result
 })

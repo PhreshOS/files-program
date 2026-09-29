@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent } from "react"
 
 /** Where the box is, inside the area it is drawn in. */
-export type Box = Readonly<{ left: number, top: number, width: number, height: number }>
+type Box = Readonly<{ left: number, top: number, width: number, height: number }>
 
 type Rect = Readonly<{ left: number, top: number, right: number, bottom: number }>
 
@@ -35,7 +35,7 @@ const notSpace = "[role=row], [role=columnheader], [data-phreshos-scroll-area-sc
  * chooses every entry it touches; with Shift or Command held it adds to what was chosen, and without
  * them a press first lets go of it. Near the top or bottom of the view, the view scrolls on its own.
  */
-export default function useMarquee(chosen: readonly string[], choose: (paths: readonly string[]) => void) {
+export default function useMarquee(selected: readonly string[], select: (paths: readonly string[]) => void) {
     const [box, setBox] = useState<Box | null>(null)
     const gesture = useRef<Gesture | null>(null)
 
@@ -49,7 +49,7 @@ export default function useMarquee(chosen: readonly string[], choose: (paths: re
             current.seen.set(entry.getAttribute("data-key")!, { left: rect.left - origin.left, top: rect.top - origin.top, right: rect.right - origin.left, bottom: rect.bottom - origin.top })
         }
         const touched = [...current.seen].filter(([, rect]) => rect.left < next.left + next.width && rect.right > next.left && rect.top < next.top + next.height && rect.bottom > next.top)
-        choose([...new Set([...current.base, ...touched.map(([path]) => path)])])
+        select([...new Set([...current.base, ...touched.map(([path]) => path)])])
     }
 
     /** Scrolls the view while the pointer rests near its top or bottom, and grows the box with it. */
@@ -80,10 +80,10 @@ export default function useMarquee(chosen: readonly string[], choose: (paths: re
             const target = event.target
             if (event.button !== 0 || !(target instanceof Element) || target.closest(notSpace)) return
             const adding = event.shiftKey || event.metaKey || event.ctrlKey
-            if (!adding) choose([])
+            if (!adding) select([])
             const area = event.currentTarget, origin = area.getBoundingClientRect()
             gesture.current = {
-                area, base: adding ? chosen : [],
+                area, base: adding ? selected : [],
                 start: { x: event.clientX - origin.left, y: event.clientY - origin.top },
                 pointer: { x: event.clientX, y: event.clientY },
                 drawing: false, seen: new Map(), frame: 0

@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
-import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react"
+import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
-import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./folders"
+import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
-import { bring, dragItems, entriesType, fromDataTransfer, fromDropItems, fromFiles, type Incoming } from "./transfer"
+import { bring, dragItems, dropInto, dropOperation, entriesType, fromDataTransfer, fromFiles, type Incoming, type Transfer } from "./transfer"
 
 type View = "list" | "grid"
 
@@ -100,8 +100,8 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         else if (selected !== "all" && !selected.includes(path)) setSelected([path])
     }
 
-    /** Chooses the entries a change made, once the folder shows them. */
-    const select = (paths: readonly string[] | undefined) => { if (paths?.length) setSelected(paths) }
+    /** Selects the entries a change made, once the folder shows them. */
+    const selectMade = (paths: readonly string[] | undefined) => { if (paths?.length) setSelected(paths) }
 
     /**
      * Runs a change the Server keeps as a task: the places show how far it is, and why it failed, in
@@ -111,7 +111,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
 
     /** Brings what was dropped or chosen from the device into a folder. */
     function transfer(incoming: Incoming, into: string, operation: "move" | "copy") {
-        void asTask(() => bring(incoming, into, operation)).then(paths => { if (into === folderPath) select(paths) })
+        void asTask(() => bring(incoming, into, operation)).then(paths => { if (into === folderPath) selectMade(paths) })
     }
 
     /** What the menus, the keys, and the buttons ask of the chosen entries, or of the folder when none is. */
@@ -119,7 +119,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         const paths = chosen.map(entry => entry.path)
         const one = chosen.length === 1 ? chosen[0]! : null
         const create = (make: typeof createFolder) => void status.run("Creating…", () => make(folderPath)).then(created => {
-            if (created) { select([created.path]); setRenaming(created.path) }
+            if (created) { selectMade([created.path]); setRenaming(created.path) }
         })
         switch (action) {
             case "open": if (one) open(one.path); break
@@ -128,9 +128,9 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
             case "new-folder": create(createFolder); break
             case "new-file": create(createFile); break
             case "upload": upload.current?.click(); break
-            case "duplicate": if (paths.length) void asTask(() => copyEntries(paths, folderPath)).then(done => select(done?.paths)); break
+            case "duplicate": if (paths.length) void asTask(() => copyEntries(paths, folderPath)).then(done => selectMade(done?.paths)); break
             case "copy": case "cut": if (paths.length) void status.run(null, () => setClipboard({ mode: action, paths })); break
-            case "paste": if (clipboard) void asTask(() => paste(folderPath)).then(done => select(done?.paths)); break
+            case "paste": if (clipboard) void asTask(() => paste(folderPath)).then(done => selectMade(done?.paths)); break
             case "trash": if (paths.length) void asTask(() => trashEntries(paths)).then(() => setSelected([])); break
             case "download": if (paths.length) void asTask(() => download(chosen)); break
             case "copy-path": void status.run(null, () => navigator.clipboard.writeText((paths.length ? paths : [folderPath]).join("\n"))); break
@@ -139,7 +139,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
 
     function finishRename(entry: Entry, name: string | null) {
         setRenaming(null)
-        if (name !== null && name !== entry.name) void status.run("Renaming…", () => renameEntry(entry.path, name)).then(renamed => select(renamed && [renamed.path]))
+        if (name !== null && name !== entry.name) void status.run("Renaming…", () => renameEntry(entry.path, name)).then(renamed => selectMade(renamed && [renamed.path]))
     }
 
     /**
@@ -173,7 +173,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     // The entries cover the whole content, its padding too, so the space around them takes a
     // right-click for the folder's menu and a drop into the folder.
     const [entriesRef, contentPadding] = useContentPadding()
-    const danger = useThemedValue(useAppearance().colors).danger
+    const colors = useThemedValue(useAppearance().colors)
     const cut = clipboard?.mode === "cut" ? clipboard.paths : []
 
     const parent = parentOf(at.path)
@@ -182,8 +182,8 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const narrow = useNarrow()
     const [drawer, setDrawer] = useState(false)
     // A place chosen from the drawer also closes it.
-    const choose = (path: string | null) => { if (path) go(path); setDrawer(false) }
-    const placesNav = <Places places={places} place={place} onChoose={choose} transfer={transfer} />
+    const goToPlace = (path: string | null) => { if (path) go(path); setDrawer(false) }
+    const placesNav = <Places places={places} place={place} onChoose={goToPlace} transfer={transfer} />
 
     // The space between the files and the footer is kept after the files too, and below the footer.
     // A narrow window gives the places up to the files and keeps them one press away, in a drawer.
@@ -224,8 +224,11 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                         style={{
                             margin: `${-contentPadding.top}px ${-contentPadding.right}px ${-contentPadding.bottom}px ${-contentPadding.left}px`,
                             padding: `${contentPadding.top}px ${contentPadding.right}px ${contentPadding.bottom}px ${contentPadding.left}px`,
-                            minHeight: "100cqh", ...entryDrag.style
-                        }} onContextMenuCapture={event => selectUnder(event.target)}
+                            minHeight: "100cqh",
+                            // The one outline of a drop into this folder, and the box that chooses
+                            // entries, take the primary color.
+                            "--accent": colors.primary
+                        } as CSSProperties} onContextMenuCapture={event => selectUnder(event.target)}
                         onPointerDown={marquee.onPointerDown} onPointerMove={marquee.onPointerMove} onPointerUp={marquee.onPointerUp} onPointerCancel={marquee.onPointerCancel}
                         onDragOverCapture={entryDrag.over} onDragLeave={entryDrag.leave} onDropCapture={entryDrag.drop}>
                         {view === "list"
@@ -268,16 +271,16 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)}>{placesNav}<Tasks /></Drawer>}
         <AppLayout.Footer style={{ paddingInline: "0.75rem 0.375rem", paddingTop: "0.625rem" }}>
             {at.file ? <>
-            {wallpaperType(at.file) && <DropdownMenu>
-                <DropdownMenu.Trigger depth="none" size="xsmall"><Wallpaper />Set as wallpaper<ChevronDown /></DropdownMenu.Trigger>
-                <DropdownMenu.Content><WallpaperMenu entry={at.file} /></DropdownMenu.Content>
-            </DropdownMenu>}
-            <Button depth="none" size="xsmall" onPress={() => void openWindow(at.file!)}><SquareArrowOutUpRight />Open in new window</Button>
+                {wallpaperType(at.file) && <DropdownMenu>
+                    <DropdownMenu.Trigger depth="none" size="xsmall"><Wallpaper />Set as wallpaper<ChevronDown /></DropdownMenu.Trigger>
+                    <DropdownMenu.Content><WallpaperMenu entry={at.file} /></DropdownMenu.Content>
+                </DropdownMenu>}
+                <Button depth="none" size="xsmall" onPress={() => void openWindow(at.file!)}><SquareArrowOutUpRight />Open in new window</Button>
             </> : <>
-            <span className={`status${status.current?.problem ? " problem" : ""}`} role="status" style={status.current?.problem ? { color: danger } : undefined}>{status.current?.text ?? summary(entries, chosen)}</span>
-            {hidden > 0 && <Button depth="none" size="xsmall" onPress={() => setShowHidden(!showHidden)}>
-                {showHidden ? `Hide ${hidden} hidden` : `Show ${hidden} hidden`}
-            </Button>}
+                <span className={`status${status.current?.problem ? " problem" : ""}`} role="status" style={status.current?.problem ? { color: colors.danger } : undefined}>{status.current?.text ?? summary(entries, chosen)}</span>
+                {hidden > 0 && <Button depth="none" size="xsmall" onPress={() => setShowHidden(!showHidden)}>
+                    {showHidden ? `Hide ${hidden} hidden` : `Show ${hidden} hidden`}
+                </Button>}
             </>}
         </AppLayout.Footer>
     </AppLayout>
@@ -477,41 +480,30 @@ function useStatus() {
  * Dragging entries: out of the collection, to another folder in it or in another Files window, and
  * into it from there or from the owner's device. The collection takes drops on its folders and on
  * itself; the space around it takes drops for the folder it shows, and a folder the drag is held over
- * opens. A drag moves entries, or copies
- * them with the copy key held, Option on a Mac and Control elsewhere; files from a device are copied.
+ * opens. A drag moves entries, or copies them with the copy key held, Option on a Mac and Control
+ * elsewhere; files from a device are copied.
  */
 function useEntryDrag(entries: readonly Entry[], folder: string, transfer: Transfer, openFolder: (path: string) => void) {
     const folders = new Set(entries.filter(entry => entry.kind === "folder").map(entry => entry.path))
-    const drop = async (items: readonly DropItem[], into: string, operation: DropOperation) => {
-        const incoming = await fromDropItems(items)
-        if (incoming) transfer(incoming, into, operation === "copy" ? "copy" : "move")
-    }
     const { dragAndDropHooks } = useDragAndDrop({
         getItems: keys => dragItems([...keys].map(String)),
         getAllowedDropOperations: () => ["move", "copy"],
         shouldAcceptItemDrop: target => folders.has(String(target.key)),
-        getDropOperation: (target, types, allowed) => {
-            if (target.type === "item" && !folders.has(String(target.key))) return "cancel"
-            return types.has(entriesType) ? allowed[0] ?? "cancel" : "copy"
-        },
-        onItemDrop: event => void drop(event.items, String(event.target.key), event.dropOperation),
+        getDropOperation: (target, types, allowed) => target.type === "item" && !folders.has(String(target.key)) ? "cancel" : dropOperation(types, allowed),
+        onItemDrop: event => void dropInto(event.items, String(event.target.key), event.dropOperation, transfer),
         // A drag held over a folder opens it, so the drag can go on deeper.
         onDropActivate: event => { if (event.target.type === "item" && folders.has(String(event.target.key))) openFolder(String(event.target.key)) },
-        onRootDrop: event => void drop(event.items, folder, event.dropOperation)
+        onRootDrop: event => void dropInto(event.items, folder, event.dropOperation, transfer)
     })
 
     const [around, setAround] = useState(false)
     const outside = (event: DragEvent) => !(event.target instanceof Element && event.target.closest("table, [role=grid]"))
     const accepts = (event: DragEvent) => event.dataTransfer.types.includes(entriesType) || event.dataTransfer.types.includes("Files")
     const copying = (event: DragEvent) => !event.dataTransfer.types.includes(entriesType) || (/Mac/.test(navigator.platform) ? event.altKey : event.ctrlKey)
-    const colors = useThemedValue(useAppearance().colors)
 
     return {
         hooks: dragAndDropHooks,
         around,
-        // One outline, the content's, marks a drop into this folder, wherever in the content it lands;
-        // it and the choosing box take the primary color.
-        style: { "--accent": colors.primary } as CSSProperties,
         over(event: DragEvent) {
             const takes = outside(event) && accepts(event)
             setAround(takes)
@@ -599,8 +591,6 @@ function useContentPadding() {
     return [ref, padding] as const
 }
 
-type Transfer = (incoming: Incoming, into: string, operation: "move" | "copy") => void
-
 /**
  * The places, each a folder that takes what is dropped on it, as a folder in the list does; one
  * the drag is held over opens.
@@ -659,10 +649,8 @@ function useTasks() {
 /** Drops on places: into the place's folder, moved or copied as anywhere else. */
 function usePlaceDrop(transfer: Transfer, open: (path: string) => void) {
     return useDragAndDrop({
-        getDropOperation: (target, types, allowed) => target.type !== "item" ? "cancel" : types.has(entriesType) ? allowed[0] ?? "cancel" : "copy",
-        onItemDrop: event => void fromDropItems(event.items).then(incoming => {
-            if (incoming) transfer(incoming, String(event.target.key), event.dropOperation === "copy" ? "copy" : "move")
-        }),
+        getDropOperation: (target, types, allowed) => target.type === "item" ? dropOperation(types, allowed) : "cancel",
+        onItemDrop: event => void dropInto(event.items, String(event.target.key), event.dropOperation, transfer),
         onDropActivate: event => { if (event.target.type === "item") open(String(event.target.key)) }
     }).dragAndDropHooks
 }
@@ -685,7 +673,7 @@ function useNarrow() {
  * back out along the same path, timed by the Appearance transaction; without motion it simply shows
  * and goes.
  */
-function Drawer({ open, children, onClose }: Readonly<{ open: boolean, children: React.ReactNode, onClose: () => void }>) {
+function Drawer({ open, children, onClose }: Readonly<{ open: boolean, children: ReactNode, onClose: () => void }>) {
     const { animations } = usePreferences()
     const { transaction } = useAppearance()
     // It stays while it slides out, and leaves once the slide ends.

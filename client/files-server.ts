@@ -1,18 +1,21 @@
 import { context } from "@phreshos/client"
 import type { Process, ServerEndpoint } from "@phreshos/core"
+import type { Clipboard } from "../server/clipboard"
 import type { FolderEntry } from "../server/folders"
 import type { Task } from "../server/tasks"
 import { kindOf, type Entry } from "./entries"
 
-export type FileContent = Readonly<{ bytes: Uint8Array, size: number, modified: number }>
+/**
+ * The one Files Server, as a window reaches it: its questions, and what it announces to every
+ * window.
+ */
+
+type FileContent = Readonly<{ bytes: Uint8Array, size: number, modified: number }>
 
 type Shared = Readonly<{ process: Process, server: ServerEndpoint }>
 let shared: Promise<Shared> | undefined
 
-/** What was copied or cut, the same in every Files window. */
-export type Clipboard = Readonly<{ mode: "copy" | "cut", paths: readonly string[] }> | null
-
-/** Who follows what the Server announces: a folder that changed, and the clipboard. */
+/** Who follows what the Server announces: a folder that changed, the clipboard, and the tasks. */
 const followers = {
     folder: new Set<(path: string) => void>(),
     clipboard: new Set<(clipboard: Clipboard) => void>(),
@@ -121,12 +124,12 @@ const long = 30 * 60_000
 type Created = Readonly<{ path: string }>
 type Placed = Readonly<{ paths: readonly string[] }>
 
-export function createFolder(parent: string, name?: string) {
-    return ask<Created>("folder.create", { parent, name })
+export function createFolder(folder: string, name?: string) {
+    return ask<Created>("folder.create", { folder, name })
 }
 
-export function createFile(parent: string) {
-    return ask<Created>("file.create", { parent })
+export function createFile(folder: string) {
+    return ask<Created>("file.create", { folder })
 }
 
 export function renameEntry(path: string, name: string) {
@@ -165,4 +168,4 @@ export async function fileBlob(path: string, type = "") {
     return type ? new Blob([blob], { type }) : blob
 }
 
-export type { Task }
+export type { Clipboard, Task }

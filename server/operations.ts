@@ -13,8 +13,6 @@ import { pipeline } from "node:stream/promises"
  * as a copy does in every file manager, and deleting moves to the machine's Trash.
  */
 
-export type Changed = readonly string[]
-
 /**
  * How a long operation reports how far it is, and learns that it should stop: `measured` gives the
  * whole amount once known, `advanced` each part done, in the unit the operation counts in.
@@ -22,7 +20,7 @@ export type Changed = readonly string[]
 export type Progress = Readonly<{ signal?: AbortSignal, measured?: (total: number) => void, advanced?: (amount: number) => void }>
 
 /** The bytes an entry holds: a file's size, or all the files inside a folder. */
-export async function sizeOf(path: string): Promise<number> {
+async function sizeOf(path: string): Promise<number> {
     const details = await lstat(path)
     if (!details.isDirectory()) return details.isFile() ? details.size : 0
     let total = 0
@@ -98,17 +96,17 @@ async function isFolder(path: string) {
 }
 
 /** A new, empty folder with a free name. */
-export async function createFolder(parent: string, name = "untitled folder") {
-    const path = join(parent, await freeName(parent, checkName(name), { isFolder: true }))
+export async function createFolder(folder: string, name = "untitled folder") {
+    const path = join(folder, await freeName(folder, checkName(name), { isFolder: true }))
     await mkdir(path)
-    return { path, changed: [parent] }
+    return { path, changed: [folder] }
 }
 
 /** A new, empty file with a free name. */
-export async function createFile(parent: string, name = "untitled.txt") {
-    const path = join(parent, await freeName(parent, checkName(name)))
+export async function createFile(folder: string, name = "untitled.txt") {
+    const path = join(folder, await freeName(folder, checkName(name)))
     await writeFile(path, "", { flag: "wx" })
-    return { path, changed: [parent] }
+    return { path, changed: [folder] }
 }
 
 /** Gives an entry another name in its folder; a name already taken there is refused. */

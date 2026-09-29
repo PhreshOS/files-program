@@ -4,11 +4,11 @@ import { Button, DocumentTheme, ProgressBar, UIProvider } from "@phreshos/react-
 import { StrictMode, useEffect, useState } from "react"
 import client from "react-dom/client"
 import Files from "./files"
-import { entryAt, homePath } from "./folders"
+import { entryAt, homePath } from "./files-server"
 import type { Entry } from "./entries"
 import "./style.css"
 
-// Files draws into its own element: dialogs and menus open in the body beside it.
+// Files draws into its own element: menus and other overlays open in the body beside it.
 client.createRoot(document.getElementById("files")!).render(<StrictMode>
     <SystemProvider system={system} fallback={<Opening />}>
         <DesktopProvider desktop={desktop} fallback={<Opening />}>

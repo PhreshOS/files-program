@@ -1,5 +1,5 @@
-import type { DropItem } from "@phreshos/react-ui"
-import { copyEntries, createFolder, moveEntries, writeFile } from "./folders"
+import type { DropItem, DropOperation } from "@phreshos/react-ui"
+import { copyEntries, createFolder, moveEntries, writeFile } from "./files-server"
 
 /**
  * What a drag of entries carries: their paths, as JSON, in one native type, so any Files window can
@@ -18,6 +18,23 @@ type DeviceEntry =
 
 /** What a drop brings: entries of this machine, or files and folders from the owner's device. */
 export type Incoming = Readonly<{ paths: readonly string[] }> | Readonly<{ device: readonly DeviceEntry[] }>
+
+/** Brings what a drop or the device's file picker brought into a folder, moving or copying it. */
+export type Transfer = (incoming: Incoming, into: string, operation: "move" | "copy") => void
+
+/**
+ * What a drop does: entries of this machine move, or are copied when the drag allows only that or the
+ * copy key is held; files and folders from the device are always copied.
+ */
+export function dropOperation(types: Readonly<{ has(type: string): boolean }>, allowed: readonly DropOperation[]): DropOperation {
+    return types.has(entriesType) ? allowed[0] ?? "cancel" : "copy"
+}
+
+/** Brings the items of a drop on a folder, row or place alike, into that folder. */
+export async function dropInto(items: readonly DropItem[], into: string, operation: DropOperation, transfer: Transfer) {
+    const incoming = await fromDropItems(items)
+    if (incoming) transfer(incoming, into, operation === "copy" ? "copy" : "move")
+}
 
 /** What arrives on a row or a collection, as React UI hands it over. */
 export async function fromDropItems(items: readonly DropItem[]): Promise<Incoming | null> {

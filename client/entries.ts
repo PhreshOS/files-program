@@ -21,9 +21,26 @@ const kinds: Readonly<Record<string, FileKind>> = {
     pdf: "pdf"
 }
 
-export function kindOf(name: string): FileKind {
+/** A file's extension, in lower case, or nothing when its name has none. */
+export function extensionOf(name: string) {
     const dot = name.lastIndexOf(".")
-    return dot > 0 ? kinds[name.slice(dot + 1).toLowerCase()] ?? "file" : "file"
+    return dot > 0 ? name.slice(dot + 1).toLowerCase() : ""
+}
+
+export function kindOf(name: string): FileKind {
+    return kinds[extensionOf(name)] ?? "file"
+}
+
+/** The media type of the files Files shows or hands on as they are, by their names. */
+const mediaTypes: Readonly<Record<string, string>> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", avif: "image/avif", bmp: "image/bmp",
+    mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", ogv: "video/ogg",
+    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac", m4a: "audio/mp4",
+    pdf: "application/pdf", html: "text/html", htm: "text/html"
+}
+
+export function mediaTypeOf(name: string): string | undefined {
+    return mediaTypes[extensionOf(name)]
 }
 
 export const kindNames: Readonly<Record<Entry["kind"], string>> = {
@@ -34,10 +51,6 @@ export function parentOf(path: string) {
     if (path === "/") return null
     const parent = path.slice(0, path.lastIndexOf("/"))
     return parent === "" ? "/" : parent
-}
-
-export function joinPath(folder: string, name: string) {
-    return folder === "/" ? `/${name}` : `${folder}/${name}`
 }
 
 export function formatSize(size: number | undefined) {

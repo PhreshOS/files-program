@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { ProgressBar, useAppearance, useThemedValue } from "@phreshos/react-ui"
 import { marked } from "marked"
 import FileIcon from "./file-icon"
-import { formatModified, formatSize, kindNames, type Entry } from "./entries"
-import { readFile } from "./folders"
+import { extensionOf, formatModified, formatSize, kindNames, mediaTypeOf, type Entry } from "./entries"
+import { readFile } from "./files-server"
 
 // The text view carries CodeMirror, so it loads only when a text file is shown.
 const TextView = lazy(() => import("./text-view"))
@@ -11,13 +11,6 @@ const TextView = lazy(() => import("./text-view"))
 /** Text and code show their beginning; media is read whole up to a limit. */
 const textLimit = 4_000_000
 const mediaLimit = 64_000_000
-
-const mediaTypes: Readonly<Record<string, string>> = {
-    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", avif: "image/avif", bmp: "image/bmp",
-    mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", ogv: "video/ogg",
-    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac", m4a: "audio/mp4",
-    pdf: "application/pdf"
-}
 
 /**
  * Files that are written as text and read as something else, a page or a picture, show either way:
@@ -29,12 +22,7 @@ export type FileMode = "preview" | "code"
 
 /** Whether a file shows both as it looks and as its code. */
 export function showsBothWays(entry: Entry) {
-    return entry.kind !== "folder" && extension(entry.name) in rendered
-}
-
-function extension(name: string) {
-    const dot = name.lastIndexOf(".")
-    return dot > 0 ? name.slice(dot + 1).toLowerCase() : ""
+    return entry.kind !== "folder" && extensionOf(entry.name) in rendered
 }
 
 type Loaded =
@@ -49,7 +37,7 @@ type Loaded =
  */
 export default function Preview({ entry, mode }: Readonly<{ entry: Entry, mode: FileMode }>) {
     const loaded = useContent(entry)
-    const form = rendered[extension(entry.name)]
+    const form = rendered[extensionOf(entry.name)]
     return <div className="preview">
         <div className="preview-content">
             {loaded.state === "loading" && <Loading name={entry.name} />}
@@ -108,13 +96,13 @@ function useContent(entry: Entry): Loaded {
     useEffect(() => {
         let current = true, url: string | undefined
         const path = entry.path
-        const type = mediaTypes[extension(entry.name)]
+        const type = mediaTypeOf(entry.name)
         const show = (next: Loaded) => { if (current) setLoaded({ ...next, path }) }
         if (type && (entry.size ?? 0) > mediaLimit) { show({ state: "none", reason: `This file is too large to preview (${formatSize(entry.size)}).` }); return }
         show({ state: "loading" })
         void (async () => {
             // A file that shows both ways is read as text; a picture among them also gets its address.
-            if (extension(entry.name) in rendered) {
+            if (extensionOf(entry.name) in rendered) {
                 const content = await readFile(path, textLimit)
                 if (type) url = URL.createObjectURL(new Blob([content.bytes as Uint8Array<ArrayBuffer>], { type }))
                 return show({ state: "text", text: new TextDecoder().decode(content.bytes), truncated: content.size > content.bytes.length, url })

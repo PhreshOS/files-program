@@ -53,8 +53,8 @@ export default function Shelf({ clipboard, onOpen }: Readonly<{ clipboard: Clipb
     const colors = useThemedValue(useAppearance().colors)
     return <ContextMenu>
         <ContextMenu.Trigger>
-            {/* A well pressed into the panel, in the default color, the way Sprout holds its catalog. */}
-            <Surface as="section" aria-label="Shelf" depth="recessed" className={`shelf${over ? " drop-target" : ""}`}
+            {/* A well pressed into the panel, in the default color and the extended material. */}
+            <Surface as="section" aria-label="Shelf" depth="recessed" material="extended" className={`shelf${over ? " drop-target" : ""}`}
                 style={{ "--accent": colors.primary } as CSSProperties}
                 onContextMenuCapture={event => menuUnder(event.target)}
                 onDragOverCapture={dragOver} onDragLeave={dragLeave} onDropCapture={drop}>

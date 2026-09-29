@@ -84,6 +84,7 @@ header [role="toolbar"],
 /* The entries fill the content, and what they hold fills them: the list's sideways scrolling, its
    presses, and its drops reach the empty space below the last entry too. */
 .entries {
+    position: relative;
     box-sizing: border-box;
     display: grid;
 }
@@ -91,8 +92,18 @@ header [role="toolbar"],
 /* A drop into this folder, on the space around the entries or on the entries themselves. */
 .entries.drop-target,
 .entries:has(:is(table, [role=grid])[data-drop-target]) {
-    outline: 3px solid var(--drop-outline);
+    outline: 3px solid color-mix(in oklab, var(--accent) 34%, transparent);
     outline-offset: -3px;
+}
+
+/* The box drawn to choose entries. */
+.marquee {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+    border: 1px solid color-mix(in oklab, var(--accent) 60%, transparent);
+    border-radius: 3px;
+    background: color-mix(in oklab, var(--accent) 14%, transparent);
 }
 
 .name {

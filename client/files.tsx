@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent } from "react"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
@@ -7,6 +7,7 @@ import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
 import { copyEntries, createFile, createFolder, existing, fileBlob, followClipboard, followFolders, listFolder, paste, renameEntry, setClipboard, trashEntries, type Clipboard } from "./folders"
+import useMarquee from "./marquee"
 import { bring, dragItems, entriesType, fromDataTransfer, fromDropItems, fromFiles, type Incoming } from "./transfer"
 
 type View = "list" | "grid"
@@ -99,17 +100,6 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         else if (selected !== "all" && !selected.includes(path)) setSelected([path])
     }
 
-    /**
-     * A press on the space around the entries, not on an entry, a column, or a scroll bar, lets go of
-     * what was chosen, as in every file manager.
-     */
-    function releaseOutside(event: PointerEvent) {
-        const target = event.target
-        if (event.button !== 0 || !(target instanceof Element)) return
-        if (target.closest("[role=row], [role=columnheader], [data-phreshos-scroll-area-scrollbar]")) return
-        setSelected([])
-    }
-
     /** Chooses the entries a change made, once the folder shows them. */
     const select = (paths: readonly string[] | undefined) => { if (paths?.length) setSelected(paths) }
 
@@ -173,6 +163,8 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     }, [])
 
     const entryDrag = useEntryDrag(entries, folderPath, transfer, open)
+    // A drag from the space around the entries draws a box that chooses them; a press there lets go.
+    const marquee = useMarquee(chosen.map(entry => entry.path), setSelected)
     // The entries cover the whole content, its padding too, so the space around them takes a
     // right-click for the folder's menu and a drop into the folder.
     const [entriesRef, contentPadding] = useContentPadding()
@@ -228,11 +220,13 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                             margin: `${-contentPadding.top}px ${-contentPadding.right}px ${-contentPadding.bottom}px ${-contentPadding.left}px`,
                             padding: `${contentPadding.top}px ${contentPadding.right}px ${contentPadding.bottom}px ${contentPadding.left}px`,
                             minHeight: "100cqh", ...entryDrag.style
-                        }} onContextMenuCapture={event => selectUnder(event.target)} onPointerDown={releaseOutside}
+                        }} onContextMenuCapture={event => selectUnder(event.target)}
+                        onPointerDown={marquee.onPointerDown} onPointerMove={marquee.onPointerMove} onPointerUp={marquee.onPointerUp} onPointerCancel={marquee.onPointerCancel}
                         onDragOverCapture={entryDrag.over} onDragLeave={entryDrag.leave} onDropCapture={entryDrag.drop}>
                         {view === "list"
                             ? <ListView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} sort={sort} onSort={setSort} onOpen={open} query={query} marks={marks} dragAndDropHooks={entryDrag.hooks} renaming={renaming} onRename={finishRename} cut={cut} />
                             : <GridView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} onOpen={open} query={query} marks={marks} dragAndDropHooks={entryDrag.hooks} renaming={renaming} onRename={finishRename} cut={cut} />}
+                        {marquee.box && <div className="marquee" style={marquee.box} />}
                     </div>
                 </ContextMenu.Trigger>
                 <ContextMenu.Content>
@@ -510,8 +504,9 @@ function useEntryDrag(entries: readonly Entry[], folder: string, transfer: Trans
     return {
         hooks: dragAndDropHooks,
         around,
-        // One outline, the content's, marks a drop into this folder, wherever in the content it lands.
-        style: { "--drop-outline": `color-mix(in oklab, ${colors.primary} 34%, transparent)` } as CSSProperties,
+        // One outline, the content's, marks a drop into this folder, wherever in the content it lands;
+        // it and the choosing box take the primary color.
+        style: { "--accent": colors.primary } as CSSProperties,
         over(event: DragEvent) {
             const takes = outside(event) && accepts(event)
             setAround(takes)

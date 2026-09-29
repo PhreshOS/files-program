@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { ProgressBar, ScrollArea, useAppearance, useThemedValue } from "@phreshos/react-ui"
+import { ScrollArea, Spinner, useAppearance, useThemedValue } from "@phreshos/react-ui"
 import { marked } from "marked"
 import FileIcon from "./file-icon"
 import { extensionOf, formatModified, formatSize, kindNames, mediaTypeOf, type Entry } from "./entries"
@@ -183,5 +183,5 @@ function trimmedToCharacter(bytes: Uint8Array) {
 }
 
 function Loading({ name }: Readonly<{ name: string }>) {
-    return <div className="preview-loading"><ProgressBar aria-label={`Opening ${name}`} indeterminate /></div>
+    return <Spinner label={`Opening ${name}`} />
 }

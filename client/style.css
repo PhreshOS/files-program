@@ -143,14 +143,15 @@ header [role="toolbar"],
     opacity: 0.55;
 }
 
+/* A folder that opens quickly never shows its wait. */
 .empty.loading {
-    width: min(14rem, 60%);
-    margin-inline: auto;
+    display: grid;
+    justify-items: center;
     opacity: 0;
     animation: appear 0.2s ease-out 0.25s forwards;
 }
 
-@keyframes appear { to { opacity: 0.8; } }
+@keyframes appear { to { opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
     .empty.loading { animation-duration: 0s; }
@@ -229,8 +230,7 @@ header [role="toolbar"],
     overflow: hidden;
 }
 
-.preview-none,
-.preview-loading {
+.preview-none {
     display: grid;
     justify-items: center;
     gap: 0.75rem;

@@ -1,11 +1,12 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { context } from "@phreshos/client"
 import { useDesktopViewport, useSystemAppearance } from "@phreshos/react"
-import { Button, DropdownMenu, Menu, ScrollArea, Tree, useDragAndDrop } from "@phreshos/react-ui"
+import { Button, ContextMenu, DropdownMenu, Menu, ScrollArea, Tree, useDragAndDrop } from "@phreshos/react-ui"
 import { ChevronDown, Pin, PinOff, SquareArrowOutUpRight } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import { sortEntries, type Entry } from "./entries"
-import { existing, followFolders, homePath, listFolder } from "./files-server"
+import { existing, followClipboard, followFolders, homePath, listFolder, type Clipboard } from "./files-server"
+import EntryMenu, { type MenuPlace } from "./panel-menu"
 import Shelf from "./shelf"
 import { bring, dragItems, dropInto, dropOperation, type Transfer } from "./transfer"
 
@@ -155,6 +156,18 @@ export default function Panel() {
     const place = places.find(item => item.path === root)
     const rootName = place?.name ?? root?.slice(root.lastIndexOf("/") + 1) ?? "Files"
 
+    // The entry a right press was on; on no entry, the folder the tree shows.
+    const [clipboard, setClipboard] = useState<Clipboard>(null)
+    useEffect(() => followClipboard(setClipboard), [])
+    const [menuFor, setMenuFor] = useState<Readonly<{ entry: Entry, place: MenuPlace }> | null>(null)
+    function menuUnder(target: EventTarget) {
+        const row = target instanceof Element ? target.closest("[role=row][data-key]") : null
+        const entry = row && entries.get(row.getAttribute("data-key")!)
+        if (entry) setMenuFor({ entry, place: "tree" })
+        else if (root) setMenuFor({ entry: { path: root, name: rootName, kind: "folder", modified: 0 }, place: "root" })
+    }
+    const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name)
+
     const transfer: Transfer = (incoming, into, operation) => void bring(incoming, into, operation).catch(() => undefined)
     const { dragAndDropHooks } = useDragAndDrop({
         getItems: keys => dragItems([...keys].map(String)),
@@ -204,11 +217,18 @@ export default function Panel() {
             <Button iconOnly depth="none" size="xsmall" aria-label="Open in Files" onPress={() => root && void openInFiles(root, rootName)}><SquareArrowOutUpRight /></Button>
             <Button iconOnly depth="none" size="xsmall" aria-label={pinned ? "Unpin" : "Keep open"} aria-pressed={pinned} onPress={() => setPinned(!pinned)}>{pinned ? <PinOff /> : <Pin />}</Button>
         </div>
-        <ScrollArea className="panel-tree">
-            {root && <Tree aria-label={rootName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
-                {renderFolder(root)}
-            </Tree>}
-        </ScrollArea>
-        <Shelf onOpen={entry => void openInFiles(entry.path, entry.name)} />
+        <ContextMenu>
+            <ContextMenu.Trigger>
+                <ScrollArea className="panel-tree" onContextMenuCapture={event => menuUnder(event.target)}>
+                    {root && <Tree aria-label={rootName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
+                        {renderFolder(root)}
+                    </Tree>}
+                </ScrollArea>
+            </ContextMenu.Trigger>
+            <ContextMenu.Content>
+                {menuFor && <EntryMenu entry={menuFor.entry} place={menuFor.place} clipboard={clipboard} onOpen={openEntry} />}
+            </ContextMenu.Content>
+        </ContextMenu>
+        <Shelf clipboard={clipboard} onOpen={openEntry} />
     </nav>
 }

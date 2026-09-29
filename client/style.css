@@ -321,10 +321,12 @@ header [role="toolbar"],
 .panel-spacer { flex: 1 1 auto; }
 .panel-tree { min-height: 0; }
 
-/* The shelf: below the tree, as tall as what it holds, up to two fifths of the panel. */
-.shelf { padding-top: 0.5rem; }
-.shelf-well { max-height: 40vh; min-height: 6rem; overflow: auto; padding: 0.375rem; }
+/* The shelf: below the tree, as tall as what it holds, up to two fifths of the panel; all of it
+   takes drops, and while empty its words stand in its middle. */
+.shelf { display: grid; align-content: start; max-height: 40vh; min-height: 6rem; overflow: auto; padding: 0.375rem; margin-top: 0.5rem; }
+.shelf:has(.shelf-empty) { align-content: center; }
+.shelf.drop-target { outline: 3px solid color-mix(in oklab, var(--accent) 34%, transparent); outline-offset: -3px; }
 .shelf-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shelf-remove { visibility: hidden; }
 [role="row"]:hover .shelf-remove, [role="row"][data-focus-visible] .shelf-remove { visibility: visible; }
-.shelf-empty { margin: 0; padding: 0.75rem 0.5rem; opacity: 0.6; text-align: center; }
+.shelf-empty { margin: 0; padding: 0.5rem; opacity: 0.6; text-align: center; }

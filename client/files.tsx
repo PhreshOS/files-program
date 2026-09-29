@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent } from "react"
 import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Table, Toolbar, Tree, type DragAndDropHooks, type DropItem, type DropOperation, type TableSort } from "@phreshos/react-ui"
 import { context } from "@phreshos/client"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List } from "@phreshos/react-ui/icons"
@@ -97,6 +97,17 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         const path = target instanceof Element ? target.closest("[role=row][data-key]")?.getAttribute("data-key") : null
         if (!path) setSelected([])
         else if (selected !== "all" && !selected.includes(path)) setSelected([path])
+    }
+
+    /**
+     * A press on the space around the entries, not on an entry, a column, or a scroll bar, lets go of
+     * what was chosen, as in every file manager.
+     */
+    function releaseOutside(event: PointerEvent) {
+        const target = event.target
+        if (event.button !== 0 || !(target instanceof Element)) return
+        if (target.closest("[role=row], [role=columnheader], [data-phreshos-scroll-area-scrollbar]")) return
+        setSelected([])
     }
 
     /** Chooses the entries a change made, once the folder shows them. */
@@ -217,7 +228,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                             margin: `${-contentPadding.top}px ${-contentPadding.right}px ${-contentPadding.bottom}px ${-contentPadding.left}px`,
                             padding: `${contentPadding.top}px ${contentPadding.right}px ${contentPadding.bottom}px ${contentPadding.left}px`,
                             minHeight: "100cqh", ...entryDrag.style
-                        }} onContextMenuCapture={event => selectUnder(event.target)}
+                        }} onContextMenuCapture={event => selectUnder(event.target)} onPointerDown={releaseOutside}
                         onDragOverCapture={entryDrag.over} onDragLeave={entryDrag.leave} onDropCapture={entryDrag.drop}>
                         {view === "list"
                             ? <ListView entries={entries} problem={folder.problem} loading={folder.loading ?? false} selected={selected} onSelect={setSelected} sort={sort} onSort={setSort} onOpen={open} query={query} marks={marks} dragAndDropHooks={entryDrag.hooks} renaming={renaming} onRename={finishRename} cut={cut} />

@@ -25,12 +25,9 @@ body,
 /* Places: two quiet groups, each under a small heading. */
 .places { display: grid; gap: 0.25rem; }
 
-/* The tasks in progress, at the foot of the places. */
-.tasks { padding-top: 0.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.625rem; }
-.task { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.3125rem; padding-inline: 0.5rem; }
-.task-title { display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; }
-.task-title > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-detail { font-size: 0.6875rem; opacity: 0.6; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* The tasks in progress, one line at the start of the footer. */
+.task-line { display: flex; align-items: center; gap: 0.5rem; min-width: 0; margin-inline-end: auto; }
+.task-text { font-size: 0.75rem; opacity: 0.62; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .places-heading {
     margin-block: 0.75rem 0.125rem;
@@ -265,41 +262,6 @@ header [role="toolbar"],
 
 
 /* The places, drawn over the files from the side in a narrow window. */
-.drawer-scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-}
-
-/* It slides in from beyond its side and back out the same way, timed by the Appearance transaction
-   set where it is drawn. Only its position moves: fading it would switch off the blur it draws of
-   what is behind it. */
-.drawer.drawer-opening { animation-name: drawer-open; }
-.drawer.drawer-closing { animation-name: drawer-close; animation-fill-mode: forwards; }
-[dir="rtl"] .drawer.drawer-opening { animation-name: drawer-open-rtl; }
-[dir="rtl"] .drawer.drawer-closing { animation-name: drawer-close-rtl; }
-
-@keyframes drawer-open { from { transform: translateX(calc(-100% - 1rem)); } }
-@keyframes drawer-open-rtl { from { transform: translateX(calc(100% + 1rem)); } }
-@keyframes drawer-close { to { transform: translateX(calc(-100% - 1rem)); } }
-@keyframes drawer-close-rtl { to { transform: translateX(calc(100% + 1rem)); } }
-
-.drawer {
-    position: fixed;
-    inset-block: 0.5rem;
-    inset-inline-start: 0.5rem;
-    z-index: 11;
-    width: min(15rem, calc(100% - 3rem));
-    padding: 0.5rem;
-    overflow: auto;
-}
-
-.drawer-title {
-    padding: 0.375rem 0.5rem 0.75rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-}
-
 @media (max-width: 640px) {
     .search { flex-basis: 8rem; }
 }

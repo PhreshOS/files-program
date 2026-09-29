@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react"
-import { AppLayout, Breadcrumbs, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, Surface, useAppearance, useDragAndDrop, usePreferences, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Spinner, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
+import { AppLayout, Breadcrumbs, Button, ContextMenu, Drawer, DropdownMenu, GridList, Input, ScrollArea, useAppearance, useDragAndDrop, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Spinner, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
@@ -194,7 +194,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     // A narrow window gives the places up to the files and keeps them one press away, in a drawer.
     return <AppLayout sidebarWidth={narrow ? 0 : undefined} style={{ paddingInlineEnd: "0.625rem", paddingBottom: "0.625rem", ...(narrow ? { columnGap: 0, paddingInlineStart: "0.625rem" } : {}) }}>
         {!narrow && <AppLayout.Title style={{ fontSize: "1.125rem", paddingInline: "0.875rem" }}>Files</AppLayout.Title>}
-        {!narrow && <AppLayout.Sidebar aria-label="Places" footer={<Tasks />}>{placesNav}</AppLayout.Sidebar>}
+        {!narrow && <AppLayout.Sidebar aria-label="Places" footer={<SettingsEntry />}>{placesNav}</AppLayout.Sidebar>}
         <AppLayout.Header style={{ gap: "0.75rem", paddingInline: "0.375rem", marginBottom: "0.375rem" }}>
             <Toolbar aria-label="Navigation" gap="xsmall">
                 {narrow && <Button iconOnly depth="flat" size="small" aria-label="Places" aria-expanded={drawer} onPress={() => setDrawer(!drawer)}><PanelLeft /></Button>}
@@ -273,8 +273,11 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                 if (files.length) transfer(fromFiles(files), folderPath, "copy")
             }} />
         </AppLayout.Content>
-        {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)}>{placesNav}<Tasks /></Drawer>}
+        {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)} title="Files" style={{ display: "flex", flexDirection: "column" }}>
+            {placesNav}<div style={{ marginTop: "auto" }}><SettingsEntry /></div>
+        </Drawer>}
         <AppLayout.Footer style={{ paddingInline: "0.75rem 0.375rem", paddingTop: "0.625rem" }}>
+            <Tasks />
             {at.file ? <>
                 {wallpaperType(at.file) && <DropdownMenu>
                     <DropdownMenu.Trigger depth="none" size="xsmall"><Wallpaper />Set as wallpaper<ChevronDown /></DropdownMenu.Trigger>
@@ -287,7 +290,6 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                     {showHidden ? `Hide ${hidden} hidden` : `Show ${hidden} hidden`}
                 </Button>}
             </>}
-            <Button iconOnly depth="none" size="xsmall" aria-label="Settings" onPress={() => void openSettings()}><Settings /></Button>
         </AppLayout.Footer>
     </AppLayout>
 }
@@ -616,30 +618,34 @@ function Places({ places, place, onChoose, transfer }: Readonly<{ places: Return
     </nav>
 }
 
+/** Files' own settings, at the foot of the places, where a program keeps them. */
+function SettingsEntry() {
+    return <Button depth="none" size="small" onPress={() => void openSettings()}><Settings />Settings</Button>
+}
+
 /**
- * The long operations of every Files window, at the foot of the places, where they stay while the
- * places scroll: how far each is, with a way to stop it; one that failed says why until dismissed.
+ * The long operations of every Files window, in one line at the start of the footer: how far the
+ * newest one is, with a way to stop it, and how many more are running. One that failed says why
+ * until dismissed.
  */
 function Tasks() {
     const tasks = useTasks()
     const danger = useThemedValue(useAppearance().colors).danger
-    if (!tasks.length) return null
-    return <section aria-label="Tasks" className="tasks">
-        <div className="places-heading">Tasks</div>
-        {tasks.map(task => <div key={task.id} className="task">
-            <div className="task-title">
-                <span title={task.title}>{task.title}</span>
-                {task.state === "failed"
-                    ? <Button iconOnly depth="none" size="xsmall" aria-label="Dismiss" onPress={() => void dismissTask(task.id)}><X /></Button>
-                    : <Button iconOnly depth="none" size="xsmall" aria-label="Stop" onPress={() => void stopTask(task.id)}><X /></Button>}
-            </div>
-            {task.state === "failed"
-                ? <div className="task-detail" style={{ color: danger, opacity: 1 }}>{problemOf(new Error(task.problem ?? ""), "It could not finish.")}</div>
-                : <>
-                    <ProgressBar aria-label={task.title} size="small" value={task.done} maxValue={task.total || 1} indeterminate={!task.total} />
-                    <div className="task-detail">{task.total === null ? "Measuring…" : task.unit === "bytes" ? `${formatSize(task.done)} of ${formatSize(task.total)}` : `${task.done} of ${task.total}`}</div>
-                </>}
-        </div>)}
+    const task = tasks[0]
+    if (!task) return null
+    const failed = task.state === "failed"
+    const detail = task.total === null ? "Measuring…" : task.unit === "bytes" ? `${formatSize(task.done)} of ${formatSize(task.total)}` : `${task.done} of ${task.total}`
+    return <section aria-label="Tasks" className="task-line">
+        {failed
+            ? <span className="task-text" style={{ color: danger, opacity: 1 }}>{task.title}: {problemOf(new Error(task.problem ?? ""), "It could not finish.")}</span>
+            : <>
+                <ProgressBar aria-label={task.title} size="small" value={task.done} maxValue={task.total || 1} indeterminate={!task.total} style={{ width: "5rem", flex: "none" }} />
+                <span className="task-text" title={task.title}>{task.title} · {detail}</span>
+            </>}
+        {tasks.length > 1 && <span className="task-text">+{tasks.length - 1} more</span>}
+        {failed
+            ? <Button iconOnly depth="none" size="xsmall" aria-label="Dismiss" onPress={() => void dismissTask(task.id)}><X /></Button>
+            : <Button iconOnly depth="none" size="xsmall" aria-label={`Stop ${task.title}`} onPress={() => void stopTask(task.id)}><X /></Button>}
     </section>
 }
 
@@ -673,33 +679,3 @@ function useNarrow() {
     return narrow
 }
 
-/**
- * The places over the files, from the side; a press outside or Escape closes them. It slides in and
- * back out along the same path, timed by the Appearance transaction; without motion it simply shows
- * and goes.
- */
-function Drawer({ open, children, onClose }: Readonly<{ open: boolean, children: ReactNode, onClose: () => void }>) {
-    const { animations } = usePreferences()
-    const { transaction } = useAppearance()
-    // It stays while it slides out, and leaves once the slide ends.
-    const [present, setPresent] = useState(open)
-    useEffect(() => { if (open) setPresent(true); else if (!animations) setPresent(false) }, [open, animations])
-    useEffect(() => {
-        if (!open) return
-        const close = (event: KeyboardEvent) => { if (event.key === "Escape") onClose() }
-        addEventListener("keydown", close)
-        return () => removeEventListener("keydown", close)
-    }, [open, onClose])
-    if (!present) return null
-
-    const easing = typeof transaction.easing === "string" ? transaction.easing : `cubic-bezier(${transaction.easing.join(", ")})`
-    const motion = animations ? { animationDuration: `${transaction.duration}ms`, animationTimingFunction: easing } : undefined
-    return <>
-        {open && <div className="drawer-scrim" onPointerDown={onClose} />}
-        <Surface className={`drawer${animations ? open ? " drawer-opening" : " drawer-closing" : ""}`} material="full" style={motion}
-            onAnimationEnd={() => { if (!open) setPresent(false) }}>
-            <div className="drawer-title">Files</div>
-            {children}
-        </Surface>
-    </>
-}

@@ -219,12 +219,26 @@ header [role="toolbar"],
 }
 .preview-scroll .preview-document { display: block; }
 
-/* The text view fills the room; CodeMirror scrolls inside it. */
-.text-view {
+/* The text fills the room, and the save bar, when there is something to save, sits below it. */
+.text-edit {
     align-self: stretch;
     justify-self: stretch;
     min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+}
+
+/* CodeMirror scrolls inside the text view. */
+.text-view {
+    min-height: 0;
     overflow: hidden;
+}
+
+.text-save {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
 }
 
 .preview-none {

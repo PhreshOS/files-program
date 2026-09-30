@@ -3,7 +3,7 @@ import { ScrollArea, Spinner, useAppearance, useThemedValue } from "@phreshos/re
 import { marked } from "marked"
 import FileIcon from "./file-icon"
 import { extensionOf, formatModified, formatSize, kindNames, mediaTypeOf, type Entry } from "./entries"
-import { readFile } from "./files-server"
+import { readFile, saveFile } from "./files-server"
 
 // The text view carries CodeMirror, so it loads only when a text file is shown.
 const TextView = lazy(() => import("./text-view"))
@@ -43,7 +43,9 @@ export default function Preview({ entry, mode }: Readonly<{ entry: Entry, mode: 
             {loaded.state === "loading" && <Loading name={entry.name} />}
             {loaded.state === "text" && (form && mode === "preview"
                 ? form === "picture" ? <Media url={loaded.url!} type="image/svg+xml" name={entry.name} /> : <Page text={loaded.text} form={form} name={entry.name} />
-                : <Suspense fallback={<Loading name={entry.name} />}><TextView name={entry.name} text={loaded.text} /></Suspense>)}
+                // What is shown whole can be edited and saved; only a beginning could not be saved.
+                : <Suspense fallback={<Loading name={entry.name} />}><TextView name={entry.name} text={loaded.text}
+                    save={loaded.truncated ? undefined : text => saveFile(entry.path, text)} /></Suspense>)}
             {loaded.state === "media" && <Media url={loaded.url} type={loaded.type} name={entry.name} />}
             {loaded.state === "none" && <div className="preview-none"><FileIcon kind={entry.kind} size={72} /><span>{loaded.reason}</span></div>}
         </div>
@@ -129,7 +131,8 @@ function useContent(entry: Entry): Loaded {
         const type = mediaTypeOf(entry.name)
         const show = (next: Loaded) => { if (current) setLoaded({ ...next, path }) }
         if (type && (entry.size ?? 0) > mediaLimit) { show({ state: "none", reason: `This file is too large to preview (${formatSize(entry.size)}).` }); return }
-        show({ state: "loading" })
+        // The same file read again, such as after a save, keeps showing until its new text arrives.
+        setLoaded(previous => previous.path === path ? previous : { state: "loading", path })
         void (async () => {
             // A file that shows both ways is read as text; a picture among them also gets its address.
             if (extensionOf(entry.name) in rendered) {

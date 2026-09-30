@@ -191,6 +191,11 @@ export function writeFile(folder: string, name: string, content: ReadableStream<
     return ask<Created>("file.write", { folder, name, size, content }, long)
 }
 
+/** New text for a file that exists, written whole in its place. */
+export function saveFile(path: string, text: string) {
+    return ask<Readonly<{ path: string }>>("file.save", { path, text })
+}
+
 export function setClipboard(clipboard: Clipboard) {
     return ask("clipboard.set", clipboard)
 }

@@ -3,7 +3,7 @@ import { context } from "@phreshos/server"
 import { z } from "zod"
 import { clipboardHolder } from "./clipboard"
 import { entryAt, existingFolders, home, listFolder, readFile } from "./folders"
-import { copyEntries, createFile, createFolder, moveEntries, renameEntry, trashEntries, writeNewFile } from "./operations"
+import { copyEntries, createFile, createFolder, moveEntries, renameEntry, saveText, trashEntries, writeNewFile } from "./operations"
 import { shelfHolder } from "./shelf"
 import { taskList } from "./tasks"
 import { folderWatch } from "./watch"
@@ -133,6 +133,12 @@ context.answer("file.write", ({ payload }) => {
         if (size !== undefined) progress.measured?.(size)
         return writeNewFile(folder, name, content as ReadableStream<Uint8Array>, progress)
     })
+})
+
+/** New text for a file that exists, as edited where Files shows it. */
+context.answer("file.save", ({ payload }) => {
+    const { path, text } = z.object({ path: absolutePath, text: z.string() }).parse(payload)
+    return change(saveText(path, text))
 })
 
 /** Another name for an entry, in its folder. */

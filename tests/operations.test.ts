@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 // The Trash is exercised as on Linux, inside the test folder, so no real Trash is touched.
 vi.mock("node:os", async original => ({ ...await original<typeof import("node:os")>(), platform: () => "linux" }))
 
-const { checkName, copyEntries, createFile, createFolder, freeName, moveEntries, renameEntry, trashEntries, writeNewFile } = await import("../server/operations")
+const { checkName, copyEntries, createFile, createFolder, freeName, moveEntries, renameEntry, saveText, trashEntries, writeNewFile } = await import("../server/operations")
 
 let root: string
 
@@ -112,4 +112,17 @@ test("tasks: one that ends leaves the list, one that fails stays with its proble
     tasks.stop(tasks.list()[0]!.id)
     await expect(running).rejects.toThrow("Stopped")
     expect(tasks.list()).toEqual([])
+})
+
+test("saving edited text replaces the file's content in one step, keeps its permissions, and leaves nothing beside it", async () => {
+    const path = join(root, "a", "note.txt")
+    await chmod(path, 0o640)
+    expect(await saveText(path, "hello, garden")).toEqual({ path, changed: [join(root, "a")] })
+    expect(await readFile(path, "utf8")).toBe("hello, garden")
+    expect((await stat(path)).mode & 0o777).toBe(0o640)
+    expect(await names(join(root, "a"))).toEqual(["note.txt"])
+    // A folder is not a file to save into, and a file that is not there is not made.
+    await expect(saveText(join(root, "b"), "x")).rejects.toThrow()
+    await expect(saveText(join(root, "a", "missing.txt"), "x")).rejects.toThrow()
+    expect(await names(join(root, "a"))).toEqual(["note.txt"])
 })

@@ -369,7 +369,7 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
 
 function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps) {
     if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
-    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" itemWidth="6.5rem" style={{ alignContent: "start", outline: "none" }} value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
+    return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" restColor="primary:subtle" itemWidth="6.5rem" style={{ alignContent: "start", outline: "none" }} value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
         {entries.map(entry => <GridList.Item key={entry.path} id={entry.path} textValue={entry.name}>
             <span className={`tile${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} size={48} />
                 {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : <span className="tile-name">{entry.name}</span>}

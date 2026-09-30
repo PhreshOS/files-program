@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs"
-import { lstat, mkdir, readdir, readlink, rename, rm, symlink, utimes, writeFile } from "node:fs/promises"
+import { chmod, lstat, mkdir, readdir, readlink, rename, rm, stat, symlink, utimes, writeFile } from "node:fs/promises"
 import { homedir, platform } from "node:os"
 import { basename, dirname, join } from "node:path"
 import { Readable, Transform } from "node:stream"
@@ -106,6 +106,28 @@ export async function createFolder(folder: string, name = "untitled folder") {
 export async function createFile(folder: string, name = "untitled.txt") {
     const path = join(folder, await freeName(folder, checkName(name)))
     await writeFile(path, "", { flag: "wx" })
+    return { path, changed: [folder] }
+}
+
+/**
+ * Saves new text into a file that already exists: an edit of that file, not a new entry taking its
+ * place. It is written beside the file first and then put in its place in one step, so the file is
+ * never left half written, and it keeps its permissions.
+ */
+export async function saveText(path: string, text: string) {
+    const current = await stat(path)
+    if (!current.isFile()) throw new Error("Only a file can be saved")
+    const folder = dirname(path)
+    const draft = join(folder, `.${basename(path)}.saving-${process.pid}-${Date.now()}`)
+    try {
+        await writeFile(draft, text, { flag: "wx" })
+        await chmod(draft, current.mode & 0o7777)
+        await rename(draft, path)
+    }
+    catch (error) {
+        await rm(draft, { force: true })
+        throw error
+    }
     return { path, changed: [folder] }
 }
 

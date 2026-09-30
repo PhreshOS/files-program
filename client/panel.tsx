@@ -207,7 +207,7 @@ export default function Panel() {
         const x = windowWidth === null ? null : side === "left" ? drawn.x + drawnSize.width + spacing : drawn.x - spacing - windowWidth
         await openFilesWindow(path, name, x === null ? null : { x: offset.x + x, y: offset.y + drawn.y })
     }
-    const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name)
+    const openEntry = (entry: Entry) => void openInFiles(entry.path, entry.name).catch(error => console.error("Files could not open", entry.path, error))
 
     // What goes to the Server shows beside the folder until it settles.
     const { doing, work } = useWork()

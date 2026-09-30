@@ -5,7 +5,7 @@ export default defineConfig({
     name: "Files",
     description: "Browse and manage the files on your machine.",
     website: "https://github.com/PhreshOS/files-program",
-    version: "0.1.2",
+    version: "0.1.3",
     categories: ["System"],
     keywords: ["files", "folders", "explorer"],
     // Drawn from icon.svg: the apricot pocket holding two green leaves, the folder Files shows inside.

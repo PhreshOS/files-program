@@ -49,12 +49,12 @@ async function setPanel(on: boolean) {
             if (!granted) throw new Error("Files needs your permission to show above your windows.")
         }
         await program.findOrCreateProcess(panelLaunch)
-        await program.startup.enable(panelLaunch)
+        await program.startup.set(panelLaunch)
     }
     else {
         const panel = (await program.processes()).find(process => process.name === "panel")
         await panel?.exit()
-        await program.startup.disable()
+        await program.startup.remove()
     }
 }
 

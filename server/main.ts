@@ -7,8 +7,14 @@ import { copyEntries, createFile, createFolder, moveEntries, renameEntry, saveTe
 import { shelfHolder } from "./shelf"
 import { taskList } from "./tasks"
 import { folderWatch } from "./watch"
+import { filesService, panelLaunch, panelShown } from "./launches"
+
+const program = await context.program()
 
 const absolutePath = z.string().startsWith("/")
+
+/** A place on the Desktop's plane: pixels, or a share of the view such as "50% - 200". */
+const value = z.union([z.number(), z.string().min(1).max(100)])
 const paths = z.array(absolutePath).min(1).max(10_000)
 
 /** A folder shown in a window changed; every window showing it lists it again. */
@@ -21,7 +27,7 @@ const tasks = taskList(list => context.publish("tasks.changed", list))
 const clipboard = clipboardHolder(held => context.publish("clipboard.changed", held))
 
 /** What was put on the shelf, announced to every window when it changes; kept in the Program's own data. */
-const shelfFolder = (await context.program()).data.navigate("Shelf")
+const shelfFolder = program.data.navigate("Shelf")
 await shelfFolder.create()
 const shelf = await shelfHolder(await shelfFolder.path(), held => context.publish("shelf.changed", held))
 
@@ -53,6 +59,28 @@ const named = (path: string) => quoted(basename(path) || "/")
 
 /** Some entries in a task's title: one by its name, several by their number. */
 const entriesIn = (paths: readonly string[]) => paths.length === 1 ? named(paths[0]!) : `${paths.length} items`
+
+/** Remembered once Files has recorded its start with the System. */
+const startupRecorded = "startup.recorded"
+
+// The Service starts with the System, so other Programs find it present. Files records that once; an
+// owner who removes the record keeps it removed, until they turn the panel on again.
+if (!await program.store.get<boolean>(startupRecorded)) {
+    await program.startup.set(filesService)
+    await program.store.set(startupRecorded, true)
+}
+
+// A Program has one start with the System, and here it is the Server's; the panel starts from it.
+if (await program.store.get<boolean>(panelShown)) await program.findOrCreateProcess(panelLaunch)
+
+/**
+ * Another Program, or anyone, shows a folder or a file in Files: a new window, starting there. It
+ * stands where the asker places it, such as beside the window it was asked from.
+ */
+context.answer("path.show", async ({ payload }) => {
+    const { path, position } = z.object({ path: absolutePath, position: z.object({ x: value, y: value }).optional() }).parse(payload)
+    await program.createProcess({ server: false, client: { title: basename(path) || "/", ...(position ? { position } : {}) }, options: { path } })
+})
 
 /** The home folder of the user running PhreshOS, where Files opens. */
 context.answer("home", () => home())

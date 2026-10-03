@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react"
 import { context } from "@phreshos/client"
-import type { Launch } from "@phreshos/core"
 import { Switch } from "@phreshos/react-ui"
 import { useFirstArrival } from "./readiness"
+import { filesService, panelLaunch, panelShown } from "../server/launches"
 import { besideThisWindow } from "./windows"
-
-/**
- * The panel: a Files window of its own in the `over` layer, at the edge of the screen. Like every
- * Files window it is a Client only, and reaches the one Files Server, starting it when it is not
- * running. The same launch starts it with the System while it is on.
- */
-export const panelLaunch = { name: "panel", server: false, client: { layer: "over", title: "Files" }, options: { view: "panel" } } as const satisfies Launch & { name: string }
 
 /**
  * Opens the settings of Files, in one small window of their own, beside the window that asked. When
@@ -32,14 +25,17 @@ export async function openSettings() {
     await window.raise()
 }
 
-/** Whether the panel is on: it is running, or starts with the System. */
+/** Whether the panel is on: it is running, or the Server starts it with the System. */
 async function panelIsOn() {
     const program = await context.program()
-    const [processes, startup] = await Promise.all([program.processes(), program.startup.get()])
-    return processes.some(process => process.name === "panel") || startup?.name === "panel"
+    const [processes, shown] = await Promise.all([program.processes(), program.store.get<boolean>(panelShown)])
+    return processes.some(process => process.name === "panel") || shown === true
 }
 
-/** Turns the panel on or off, now and at the next start of the System. */
+/**
+ * Turns the panel on or off, now and at the next start of the System. The Server starts it then, so
+ * turning it on also has the Server start with the System again, if the owner had removed that.
+ */
 async function setPanel(on: boolean) {
     const program = await context.program()
     if (on) {
@@ -48,13 +44,14 @@ async function setPanel(on: boolean) {
             const granted = await context.permissions.request("layers", ["over"])
             if (!granted) throw new Error("Files needs your permission to show above your windows.")
         }
+        await program.store.set(panelShown, true)
         await program.findOrCreateProcess(panelLaunch)
-        await program.startup.set(panelLaunch)
+        await program.startup.set(filesService)
     }
     else {
+        await program.store.set(panelShown, false)
         const panel = (await program.processes()).find(process => process.name === "panel")
         await panel?.exit()
-        await program.startup.remove()
     }
 }
 

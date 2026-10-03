@@ -11,13 +11,16 @@ export default defineConfig({
     // Drawn from icon.svg: the apricot pocket holding two green leaves, the folder Files shows inside.
     icon: "icon.png",
     // Setting a file as the wallpaper uploads it and changes the Appearance; the panel at the edge
-    // of the screen stays above every window, in the `over` layer.
-    permissions: { uploads: true, appearance: true, layers: ["over"] },
+    // of the screen stays above every window, in the `over` layer; a folder opens in a terminal
+    // through the "terminal" Service, when one is present.
+    permissions: { uploads: true, appearance: true, layers: ["over"], services: ["terminal"] },
     buildCommand: "vite-node scripts/build.ts",
     // One Server reaches the machine's files directly with Node.js, as a worker. It runs once, in the
-    // Process named "server"; every window is a Client that connects to it, so windows start without it.
+    // Process named "files", which is the "files" Service; every window is a Client that connects to
+    // it, so windows start without it.
     server: {
         start: false,
+        service: true,
         location: "dist/server",
         worker: "main.js",
         devCommand: "vite-node server/main.ts"

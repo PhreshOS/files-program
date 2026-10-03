@@ -3,6 +3,7 @@ import type { Process, ServerEndpoint } from "@phreshos/core"
 import type { Clipboard } from "../server/clipboard"
 import type { FolderEntry } from "../server/folders"
 import type { Task } from "../server/tasks"
+import { filesService } from "../server/launches"
 import { kindOf, type Entry } from "./entries"
 
 /**
@@ -24,13 +25,13 @@ const followers = {
 }
 
 /**
- * The one Files Server every window uses. The first window to need it starts it; the others, a
- * second Files window or a file's own window, find it running.
+ * The one Files Server every window uses, the "files" Service. It starts with the System; a window
+ * that finds it gone starts it again.
  */
 function server() {
     shared ??= (async () => {
         const program = await context.program()
-        const process = await program.findOrCreateProcess({ name: "server", server: true, client: false })
+        const process = await program.findOrCreateProcess(filesService)
         await process.server.waitReady()
         process.server.subscribe("folder.changed", payload => { for (const follow of followers.folder) follow((payload as { path: string }).path) })
         process.server.subscribe("clipboard.changed", payload => { for (const follow of followers.clipboard) follow(payload as Clipboard) })

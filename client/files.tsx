@@ -228,7 +228,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                     <SegmentedControl.Item id="grid" aria-label="Icons"><LayoutGrid /></SegmentedControl.Item>
                 </SegmentedControl>}</div>
         </AppLayout.Header>
-        <AppLayout.Content style={{ containerType: "size" }}>
+        <AppLayout.Content>
             {at.file ? <FileView file={at.file} mode={fileMode} /> : <ContextMenu>
                 <ContextMenu.Trigger>
                     <div ref={entriesRef} className={`entries${entryDrag.around ? " drop-target" : ""}`}
@@ -353,6 +353,8 @@ type CollectionProps = Readonly<{
 // As in every file manager, a press chooses one entry, with Command or Shift it adds more, and a
 // double press opens it.
 function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps & Readonly<{ sort: TableSort, onSort: (sort: TableSort) => void }>) {
+    // With nothing to list, the columns have nothing to head: the line stands in the middle alone.
+    if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
     return <ScrollArea axis="horizontal"><div className="list-columns"><Table aria-label="Entries" size="small" selectionMode="multiple" selectionBehavior="replace" value={selected} onChange={onSelect} onAction={onOpen} sort={sort} onSortChange={onSort} dragAndDropHooks={dragAndDropHooks} style={{ outline: "none" }}>
         <Table.Header>
             <Table.Column id="name" rowHeader sortable>Name</Table.Column>
@@ -360,7 +362,7 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
             <Table.Column id="size" sortable>Size</Table.Column>
             <Table.Column id="kind" sortable>Kind</Table.Column>
         </Table.Header>
-        <Table.Body items={entries.map(entry => ({ ...entry, id: entry.path }))} dependencies={[renaming, cut, marks]} renderEmptyState={() => <Empty query={query} problem={problem} loading={loading} />}>
+        <Table.Body items={entries.map(entry => ({ ...entry, id: entry.path }))} dependencies={[renaming, cut, marks]}>
             {entry => <Table.Row id={entry.path} textValue={entry.name}>
                 <Table.Cell><span className={`name${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} />
                     {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : entry.name}
@@ -418,8 +420,8 @@ function NewItems() {
 
 function Empty({ query, problem, loading }: Readonly<{ query: string, problem: string | null, loading: boolean }>) {
     // A slow folder shows a moving bar; a quick one never flashes it.
-    if (loading) return <div className="empty loading"><Spinner label="Opening the folder" /></div>
-    return <div className="empty">{problem ?? (query.trim() ? `Nothing here matches “${query.trim()}”.` : "This folder is empty.")}</div>
+    if (loading) return <AppLayout.Placeholder className="empty loading"><Spinner label="Opening the folder" /></AppLayout.Placeholder>
+    return <AppLayout.Placeholder className="empty">{problem ?? (query.trim() ? `Nothing here matches “${query.trim()}”.` : "This folder is empty.")}</AppLayout.Placeholder>
 }
 
 function summary(entries: readonly Entry[], chosen: readonly Entry[]) {

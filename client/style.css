@@ -135,15 +135,11 @@ header [role="toolbar"],
 }
 
 .empty {
-    padding: 3rem 1rem;
-    text-align: center;
     opacity: 0.55;
 }
 
 /* A folder that opens quickly never shows its wait. */
 .empty.loading {
-    display: grid;
-    justify-items: center;
     opacity: 0;
     animation: appear 0.2s ease-out 0.25s forwards;
 }

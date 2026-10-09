@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
 import { AppLayout, Breadcrumbs, useAppLayout, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, useAppearance, useDragAndDrop, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Spinner, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, SquareTerminal, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
+import { ArrowLeft, ArrowRight, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, SquareTerminal, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
@@ -190,7 +190,6 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const colors = useThemedValue(useAppearance().colors)
     const cut = clipboard?.mode === "cut" ? clipboard.paths : []
 
-    const parent = parentOf(at.path)
     const place = places.find(item => item.path === at.path)?.path ?? (at.path === "/" ? "/" : null)
 
     const goToPlace = (path: string | null) => { if (path) go(path) }
@@ -206,7 +205,6 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                 <AppLayout.SidebarToggle />
                 <Button iconOnly depth="flat" size="small" aria-label="Back" disabled={!location.back.length} onPress={back}><ArrowLeft /></Button>
                 <Button iconOnly depth="flat" size="small" aria-label="Forward" disabled={!location.forward.length} onPress={forward}><ArrowRight /></Button>
-                <Button iconOnly depth="flat" size="small" aria-label="Up" disabled={parent === null} onPress={() => parent && go(parent)}><ArrowUp /></Button>
             </Toolbar>
             <Path path={at.path} home={home} marks={marks} onGo={path => go(path)} />
             <DropdownMenu>

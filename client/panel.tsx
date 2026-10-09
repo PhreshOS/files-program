@@ -44,9 +44,10 @@ const placesOf = (home: string): readonly Place[] => [
 /**
  * Where the panel stands: on the edge the Taskbar does not use, as tall as the space Windows get,
  * at the Appearance spacing from the edge like everything else on the Desktop. Waiting, it lies
- * beyond that edge with only a thin strip left on the screen, which catches the pointer; opening
- * slides it in whole, with the Desktop's Surface behind it. It keeps its width either way, so the
- * motion only moves it. It follows the Desktop when it changes, without motion.
+ * beyond that edge with only a thin strip left on the screen, which catches the pointer, and with no
+ * Surface, so the strip is not seen; opening slides it in whole, with the Desktop's Surface behind
+ * it. It keeps its width either way, so the motion only moves it. It follows the Desktop when it
+ * changes, without motion.
  */
 function usePanelPlacement(open: boolean, side: Side) {
     const { size } = useDesktopViewport()
@@ -62,8 +63,11 @@ function usePanelPlacement(open: boolean, side: Side) {
         const geometry = { x, y: inset.top - size.height / 2, width, height: size.height - inset.top - inset.bottom }
         const moving = shown.current !== null && shown.current !== open
         shown.current = open
-        const presentation = moving ? context.presentation.transaction() : context.presentation
-        void Promise.all([presentation.setGeometry(geometry), presentation.setSurface(open)])
+        // Only the position slides. The Surface is there the moment the panel sets off to open, and
+        // gone the moment it has arrived out of sight, both at once: it never fades on the way.
+        if (open) void context.presentation.setSurface(true)
+        const arrived = moving ? context.presentation.transactionAndWait().setGeometry(geometry) : context.presentation.setGeometry(geometry)
+        if (!open) void arrived.then(() => { if (shown.current === false) return context.presentation.setSurface(false) })
     }, [open, side, size.width, size.height, spacing, taskbar.position, taskbar.size, taskbar.overlay])
 }
 

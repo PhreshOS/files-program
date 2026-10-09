@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react"
-import { AppLayout, Breadcrumbs, Button, ContextMenu, Drawer, DropdownMenu, GridList, Input, ScrollArea, useAppearance, useDragAndDrop, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Spinner, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, PanelLeft, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, SquareTerminal, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
+import { AppLayout, Breadcrumbs, useAppLayout, Button, ContextMenu, DropdownMenu, GridList, Input, ScrollArea, useAppearance, useDragAndDrop, useThemedValue, Menu, ProgressBar, SearchField, SegmentedControl, Spinner, Table, Toolbar, Tree, type DragAndDropHooks, type TableSort } from "@phreshos/react-ui"
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, Download, Eye, FilePlus, Link, Plus, Copy, FolderOpen, FolderPlus, PencilLine, Scissors, Settings, SquareArrowOutUpRight, SquareTerminal, Trash2, Upload, Wallpaper, LayoutGrid, List, X } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
@@ -193,25 +193,22 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const parent = parentOf(at.path)
     const place = places.find(item => item.path === at.path)?.path ?? (at.path === "/" ? "/" : null)
 
-    const narrow = useNarrow()
-    const [drawer, setDrawer] = useState(false)
-    // A place chosen from the drawer also closes it.
-    const goToPlace = (path: string | null) => { if (path) go(path); setDrawer(false) }
-    const placesNav = <Places places={places} place={place} onChoose={goToPlace} transfer={transfer} />
+    const goToPlace = (path: string | null) => { if (path) go(path) }
 
     // The space between the files and the footer is kept after the files too, and below the footer.
-    // A narrow window gives the places up to the files and keeps them one press away, in a drawer.
-    return <AppLayout sidebarWidth={narrow ? 0 : undefined} style={{ paddingInlineEnd: "0.625rem", paddingBottom: "0.625rem", ...(narrow ? { columnGap: 0, paddingInlineStart: "0.625rem" } : {}) }}>
-        {!narrow && <AppLayout.Title style={{ fontSize: "1.125rem", paddingInline: "0.875rem" }}>Files</AppLayout.Title>}
-        {!narrow && <AppLayout.Sidebar aria-label="Places" footer={<SettingsEntry />}>{placesNav}</AppLayout.Sidebar>}
+    // A narrow window gives the places up to the files and keeps them one press away, in the
+    // layout's drawer.
+    return <AppLayout style={{ paddingInlineEnd: "0.625rem", paddingBottom: "0.625rem" }}>
+        <AppLayout.Title style={{ fontSize: "1.125rem", paddingInline: "0.875rem" }}>Files</AppLayout.Title>
+        <AppLayout.Sidebar aria-label="Places" footer={<SettingsEntry />}><Places places={places} place={place} onChoose={goToPlace} transfer={transfer} /></AppLayout.Sidebar>
         <AppLayout.Header style={{ gap: "0.75rem", paddingInline: "0.375rem", marginBottom: "0.375rem" }}>
             <Toolbar aria-label="Navigation" gap="xsmall">
-                {narrow && <Button iconOnly depth="flat" size="small" aria-label="Places" aria-expanded={drawer} onPress={() => setDrawer(!drawer)}><PanelLeft /></Button>}
+                <AppLayout.SidebarToggle />
                 <Button iconOnly depth="flat" size="small" aria-label="Back" disabled={!location.back.length} onPress={back}><ArrowLeft /></Button>
                 <Button iconOnly depth="flat" size="small" aria-label="Forward" disabled={!location.forward.length} onPress={forward}><ArrowRight /></Button>
                 <Button iconOnly depth="flat" size="small" aria-label="Up" disabled={parent === null} onPress={() => parent && go(parent)}><ArrowUp /></Button>
             </Toolbar>
-            <Path path={at.path} home={home} narrow={narrow} marks={marks} onGo={path => go(path)} />
+            <Path path={at.path} home={home} marks={marks} onGo={path => go(path)} />
             <DropdownMenu>
                 <DropdownMenu.Trigger iconOnly depth="flat" size="small" aria-label="New" disabled={at.file !== null}><Plus /></DropdownMenu.Trigger>
                 <DropdownMenu.Content>
@@ -284,9 +281,6 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                 if (files.length) transfer(fromFiles(files), folderPath, "copy")
             }} />
         </AppLayout.Content>
-        {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)} title="Files" style={{ display: "flex", flexDirection: "column" }}>
-            {placesNav}<div style={{ marginTop: "auto" }}><SettingsEntry /></div>
-        </Drawer>}
         <AppLayout.Footer style={{ paddingInline: "0.75rem 0.375rem", paddingTop: "0.625rem" }}>
             <Tasks />
             {at.file ? <>
@@ -309,7 +303,8 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
  * The path as steps: every folder above is a step back to it. In a narrow window only the current
  * step shows, and it opens a menu of the ones above it.
  */
-function Path({ path, home, narrow, marks, onGo }: Readonly<{ path: string, home: string, narrow: boolean, marks: ReadonlyMap<string, FolderMark>, onGo: (path: string) => void }>) {
+function Path({ path, home, marks, onGo }: Readonly<{ path: string, home: string, marks: ReadonlyMap<string, FolderMark>, onGo: (path: string) => void }>) {
+    const { narrow } = useAppLayout()
     const parts = path === "/" ? [] : path.slice(1).split("/")
     const steps = [{ path: "/", name: "Root" }, ...parts.map((name, index) => ({ path: `/${parts.slice(0, index + 1).join("/")}`, name }))]
     // Inside the home folder, the path starts there.
@@ -612,9 +607,12 @@ function useContentPadding() {
  * The places, each a folder that takes what is dropped on it, as a folder in the list does; one
  * the drag is held over opens.
  */
-function Places({ places, place, onChoose, transfer }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void, transfer: Transfer }>) {
-    const favorites = usePlaceDrop(transfer, onChoose)
-    const machine = usePlaceDrop(transfer, onChoose)
+/** The places; choosing one also puts a narrow window's drawer away. */
+function Places({ places, place, onChoose: choose, transfer }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void, transfer: Transfer }>) {
+    const { closeSidebar } = useAppLayout()
+    const onChoose = (path: string | null) => { choose(path); closeSidebar() }
+    const favorites = usePlaceDrop(transfer, choose)
+    const machine = usePlaceDrop(transfer, choose)
     return <nav aria-label="Places" className="places">
         <div className="places-heading">Favorites</div>
         <Tree aria-label="Favorites" selectionMode="single" value={place} onChange={onChoose} dragAndDropHooks={favorites}>
@@ -678,15 +676,4 @@ function usePlaceDrop(transfer: Transfer, open: (path: string) => void) {
 }
 
 /** Narrow enough that the places would crowd the files out. */
-function useNarrow() {
-    const query = "(max-width: 640px)"
-    const [narrow, setNarrow] = useState(() => matchMedia(query).matches)
-    useEffect(() => {
-        const media = matchMedia(query)
-        const follow = () => setNarrow(media.matches)
-        media.addEventListener("change", follow)
-        return () => media.removeEventListener("change", follow)
-    }, [])
-    return narrow
-}
 

@@ -1,4 +1,4 @@
-import type { AppearanceWallpaper, Theme } from "@phreshos/core"
+import type { AppearanceWallpapers, Theme } from "@phreshos/core"
 import { context, system } from "@phreshos/client"
 import { Menu } from "@phreshos/react-ui"
 import { Wallpaper } from "@phreshos/react-ui/icons"
@@ -17,7 +17,7 @@ export function wallpaperType(entry: Entry) {
     return fits && (entry.size ?? 0) <= wallpaperLimit ? type : null
 }
 
-type Place = keyof AppearanceWallpaper
+type Place = keyof AppearanceWallpapers
 const places: readonly Readonly<{ id: Place, name: string }>[] = [{ id: "desktop", name: "Desktop" }, { id: "signIn", name: "Sign-in screen" }]
 const themes: readonly Readonly<{ id: Theme, name: string }>[] = [{ id: "light", name: "Light" }, { id: "dark", name: "Dark" }]
 
@@ -53,5 +53,5 @@ async function setWallpaper(entry: Entry, place: Place, theme: Theme) {
     }
     const { bytes } = await readFile(entry.path)
     const upload = await system.uploads.write(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: wallpaperType(entry)! }))
-    await system.appearance.update({ wallpaper: { [theme]: { [place]: upload.file } } })
+    await system.appearance.update({ wallpapers: { [theme]: { [place]: upload.file } } })
 }

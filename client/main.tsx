@@ -10,6 +10,7 @@ import { entryAt, homePath } from "./files-server"
 import { useFirstArrival } from "./readiness"
 import type { Entry } from "./entries"
 import "./style.css"
+import { openedFolder } from "./opening"
 
 // Files draws into its own element: menus and other overlays open in the body beside it.
 client.createRoot(document.getElementById("files")!).render(<StrictMode>
@@ -49,7 +50,9 @@ function Home() {
     const [start, setStart] = useState<Readonly<{ home: string, at: Entry | null }> | { problem: string }>()
     useEffect(() => {
         void (async () => {
-            const [home, path] = await Promise.all([homePath(), context.options("path")])
+            // A path it was given, or a folder it was opened to show.
+            const [home, given, opened] = await Promise.all([homePath(), context.options("path"), context.opened()])
+            const path = given ?? openedFolder(opened)
             const at = path ? await entryAt(path).catch(() => null) : null
             setStart(path && !at ? { problem: "This folder or file no longer exists, or Files cannot reach it." } : { home, at })
         })().catch(error => setStart({ problem: `Files could not reach its Server. ${error instanceof Error ? error.message : ""}` }))

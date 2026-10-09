@@ -7,8 +7,8 @@ import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
 import { useFirstArrival } from "./readiness"
 import { besideThisWindow, openFilesWindow } from "./windows"
-import { useService } from "./services"
-import { terminalService } from "../server/launches"
+import { terminalAddress } from "./opening"
+import { system } from "@phreshos/client"
 import type { Work } from "./work"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
@@ -122,7 +122,6 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     }
 
     // Shown while a Program offers the "terminal" Service, such as the Terminal.
-    const terminal = useService(terminalService)
 
     /** What the menus, the keys, and the buttons ask of the chosen entries, or of the folder when none is. */
     function run(action: string) {
@@ -134,10 +133,8 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         switch (action) {
             case "open": if (one) open(one.path); break
             case "window": if (one) void openWindow(one); break
-            case "terminal": if (terminal) void status.run(null, async () => {
-                const position = await besideThisWindow()
-                await terminal.ask("session.open", { cwd: one?.path ?? folderPath, ...(position ? { position } : {}) })
-            }); break
+            // A shell at the folder, opened with whatever the owner opens shells with, such as Terminal.
+            case "terminal": void status.run(null, () => system.open({ type: "x-scheme-handler/terminal", uri: terminalAddress(one?.path ?? folderPath) })); break
             case "rename": if (one) setRenaming(one.path); break
             case "new-folder": create(createFolder); break
             case "new-file": create(createFile); break
@@ -251,7 +248,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                         ? <Menu aria-label="Entries" size="small" onAction={action => run(String(action))}>
                             <Menu.Item id="open" disabled={chosen.length !== 1}><FolderOpen />Open</Menu.Item>
                             <Menu.Item id="window" disabled={chosen.length !== 1}><SquareArrowOutUpRight />Open in new window</Menu.Item>
-                            {terminal && chosen.length === 1 && chosen[0]!.kind === "folder" && <Menu.Item id="terminal"><SquareTerminal />Open in Terminal</Menu.Item>}
+                            {chosen.length === 1 && chosen[0]!.kind === "folder" && <Menu.Item id="terminal"><SquareTerminal />Open in Terminal</Menu.Item>}
                             {chosen.length === 1 && wallpaperType(chosen[0]!) && <WallpaperSubmenu entry={chosen[0]!} work={work} />}
                             <Menu.Separator />
                             <Menu.Item id="rename" disabled={chosen.length !== 1}><PencilLine />Rename</Menu.Item>
@@ -269,7 +266,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                             <Menu.Separator />
                             <Menu.Item id="paste" disabled={!clipboard}><ClipboardPaste />Paste</Menu.Item>
                             <Menu.Item id="copy-path"><Link />Copy path</Menu.Item>
-                            {terminal && <Menu.Item id="terminal"><SquareTerminal />Open in Terminal</Menu.Item>}
+                            <Menu.Item id="terminal"><SquareTerminal />Open in Terminal</Menu.Item>
                         </Menu>}
                 </ContextMenu.Content>
             </ContextMenu>}

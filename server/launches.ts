@@ -16,5 +16,3 @@ export const panelLaunch = { name: "panel", server: false, client: { layer: "ove
 /** Whether the panel is on, kept in the Program store; the Server starts it with the System while it is. */
 export const panelShown = "panel.shown"
 
-/** The Service a Files window opens a folder in a terminal through, offered by the Terminal or any Program like it. */
-export const terminalService = "terminal"

@@ -1,4 +1,4 @@
-import type { AppearanceWallpapers, Theme } from "@phreshos/core"
+import { wallpaperSizeLimit, type AppearanceWallpapers, type Theme } from "@phreshos/core"
 import { context, system } from "@phreshos/client"
 import { Menu } from "@phreshos/react-ui"
 import { Wallpaper } from "@phreshos/react-ui/icons"
@@ -6,15 +6,14 @@ import { mediaTypeOf, type Entry } from "./entries"
 import { readFile } from "./files-server"
 import type { Work } from "./work"
 
-/** What a wallpaper may be: a picture, a video the browser plays everywhere, or a page; and the most the System takes. */
+/** What a wallpaper may be: a picture, a video the browser plays everywhere, or a page. */
 const wallpaperVideos = new Set(["video/mp4", "video/webm", "video/ogg"])
-const wallpaperLimit = 50 * 1024 * 1024
 
 /** The type a file would have as a wallpaper, or null when it cannot be one. */
 export function wallpaperType(entry: Entry) {
     const type = entry.kind === "folder" ? undefined : mediaTypeOf(entry.name)
     const fits = type !== undefined && (type.startsWith("image/") || wallpaperVideos.has(type) || type === "text/html")
-    return fits && (entry.size ?? 0) <= wallpaperLimit ? type : null
+    return fits && (entry.size ?? 0) <= wallpaperSizeLimit ? type : null
 }
 
 type Place = keyof AppearanceWallpapers

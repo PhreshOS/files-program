@@ -1,4 +1,4 @@
-import { DesktopProvider, SystemProvider, useDesktopPreferences, useSystemAppearance } from "@phreshos/react"
+import { DesktopProvider, SystemProvider, useResolvedDesktopPreferences, useSystemAppearance } from "@phreshos/react"
 import { context, desktop, system } from "@phreshos/client"
 import { Button, DocumentTheme, Loading, UIProvider } from "@phreshos/react-ui"
 import { StrictMode, useEffect, useState } from "react"
@@ -21,7 +21,7 @@ client.createRoot(document.getElementById("files")!).render(<StrictMode>
 </StrictMode>)
 
 function Themed() {
-    return <UIProvider appearance={useSystemAppearance()} preferences={useDesktopPreferences()}>
+    return <UIProvider appearance={useSystemAppearance()} preferences={useResolvedDesktopPreferences()}>
         <DocumentTheme />
         <View />
     </UIProvider>

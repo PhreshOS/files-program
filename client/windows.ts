@@ -1,5 +1,5 @@
-import { context } from "@phreshos/client"
-import { parseRelativeValue, type Position, type Value } from "@phreshos/core"
+import { context, system } from "@phreshos/client"
+import { parseRelativeValue, type OpenTarget, type Position, type Value } from "@phreshos/core"
 
 /** How far a new Files window stands from the Files window that opened it, down and across. */
 const step = 32
@@ -38,4 +38,12 @@ function shifted(value: Value): Value | null {
 export async function declaredWidth(): Promise<number | null> {
     const width = (await context.program()).client?.size?.width
     return typeof width === "number" ? width : null
+}
+
+/**
+ * Opens something with another Program directly over this window, at its place, where that Program
+ * does not say where its windows open.
+ */
+export async function openOver(target: OpenTarget) {
+    return system.open(target, { position: await context.window.position() })
 }

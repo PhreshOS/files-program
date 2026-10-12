@@ -6,9 +6,8 @@ import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
 import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
 import { useFirstArrival } from "./readiness"
-import { besideThisWindow, openFilesWindow } from "./windows"
+import { besideThisWindow, openFilesWindow, openOver } from "./windows"
 import { terminalAddress } from "./opening"
-import { system } from "@phreshos/client"
 import type { Work } from "./work"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
@@ -133,8 +132,8 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
         switch (action) {
             case "open": if (one) open(one.path); break
             case "window": if (one) void openWindow(one); break
-            // A shell at the folder, opened with whatever the owner opens shells with, such as Terminal.
-            case "terminal": void status.run(null, () => system.open({ type: "x-scheme-handler/terminal", uri: terminalAddress(one?.path ?? folderPath) })); break
+            // A shell at the folder over this window, opened with whatever the owner opens shells with, such as Terminal.
+            case "terminal": void status.run(null, () => openOver({ type: "x-scheme-handler/terminal", uri: terminalAddress(one?.path ?? folderPath) })); break
             case "rename": if (one) setRenaming(one.path); break
             case "new-folder": create(createFolder); break
             case "new-file": create(createFile); break

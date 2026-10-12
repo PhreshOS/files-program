@@ -58,7 +58,7 @@ export default function Shelf({ clipboard, onOpen, work }: Readonly<{ clipboard:
     return <ContextMenu>
         <ContextMenu.Trigger>
             {/* A well pressed into the panel, in the default color and the extended material. */}
-            <Surface as="section" aria-label="Shelf" depth="recessed" material="extended" className={`shelf${over ? " drop-target" : ""}`}
+            <Surface as="section" aria-label="Shelf" depth="recessed" className={`shelf${over ? " drop-target" : ""}`}
                 style={{ "--accent": colors.primary } as CSSProperties}
                 onContextMenuCapture={event => menuUnder(event.target)}
                 onDragOverCapture={dragOver} onDragLeave={dragLeave} onDropCapture={drop}>

@@ -7,7 +7,7 @@ import { copyEntries, createFile, createFolder, moveEntries, renameEntry, saveTe
 import { shelfHolder } from "./shelf"
 import { taskList } from "./tasks"
 import { folderWatch } from "./watch"
-import { filesService, panelLaunch, panelShown } from "./launches"
+import { filesLaunch, panelLaunch, panelShown, pickerLaunch } from "./launches"
 
 const program = await context.program()
 
@@ -60,17 +60,43 @@ const named = (path: string) => quoted(basename(path) || "/")
 /** Some entries in a task's title: one by its name, several by their number. */
 const entriesIn = (paths: readonly string[]) => paths.length === 1 ? named(paths[0]!) : `${paths.length} items`
 
-/** Remembered once Files has recorded its start with the System. */
+/**
+ * Starts the picker again when it fails on its own, while this Server runs: the Service stays present
+ * for other Programs. One stopped from outside, by the owner, by an update or an uninstall, or by
+ * another Program taking its name, carries the signal that stopped it, and stays stopped, so two
+ * providers never take a name from each other forever. It waits a moment first, and longer each time
+ * the picker fails soon after it started, up to a minute, so one that cannot run does not take the
+ * machine with it.
+ */
+function keepPicker() {
+    const first = 1_000, longest = 60_000, settled = 60_000
+    let wait = first, started = Date.now()
+    program.subscribe("processExit", ({ process, code, signal }) => {
+        if (process.name !== pickerLaunch.name || signal !== null || code === 0) return
+        wait = Date.now() - started < settled ? Math.min(wait * 2, longest) : first
+        setTimeout(() => {
+            started = Date.now()
+            void program.findOrCreateProcess(pickerLaunch).catch(() => undefined)
+        }, wait)
+    })
+}
+
+/** Remembered once Files has set its start with the System. */
 const startupRecorded = "startup.recorded"
 
-// The Service starts with the System, so other Programs find it present. Files records that once; an
-// owner who removes the record keeps it removed, until they turn the panel on again.
-if (!await program.store.get<boolean>(startupRecorded)) {
-    await program.startup.set(filesService)
+// The Server starts with the System, so the picker it keeps is present for other Programs. Installing
+// Files runs this Server at once, and it records that start the first time; an owner who removes it
+// keeps it removed, until they turn it on again in Files' settings. A Program run from a project, not
+// installed, has none.
+if (await program.installedAt() !== null && !await program.store.get<boolean>(startupRecorded)) {
+    await program.startup.set(filesLaunch)
     await program.store.set(startupRecorded, true)
 }
 
-// A Program has one start with the System, and here it is the Server's; the panel starts from it.
+// A Program has one start with the System, and here it is the Server's; the picker starts from it, so
+// other Programs find it present, and the panel too while it is on.
+await program.findOrCreateProcess(pickerLaunch)
+keepPicker()
 if (await program.store.get<boolean>(panelShown)) await program.findOrCreateProcess(panelLaunch)
 
 /**

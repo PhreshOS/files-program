@@ -4,10 +4,10 @@ import { ArrowLeft, ArrowRight, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, 
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
-import { formatModified, formatSize, kindNames, parentOf, sortEntries, type Entry } from "./entries"
+import { formatModified, formatSize, kindNames, openTypeOf, parentOf, sortEntries, type Entry } from "./entries"
 import { useFirstArrival } from "./readiness"
 import { besideThisWindow, openFilesWindow, openOver } from "./windows"
-import { terminalAddress } from "./opening"
+import { fileAddress, terminalAddress } from "./opening"
 import type { Work } from "./work"
 import { copyEntries, createFile, createFolder, dismissTask, existing, fileBlob, followClipboard, followFolders, followTasks, listFolder, paste, renameEntry, setClipboard, stopTask, trashEntries, type Clipboard, type Task } from "./files-server"
 import useMarquee from "./marquee"
@@ -23,7 +23,7 @@ type Location = Readonly<{ at: Place, back: readonly Place[], forward: readonly 
 
 // The usual folders are folders like any other, marked with what they hold, so a folder added to
 // Favorites later sits among them as an equal.
-const placesOf = (home: string): readonly Readonly<{ path: string, name: string, mark: FolderMark }>[] => [
+export const placesOf = (home: string): readonly Readonly<{ path: string, name: string, mark: FolderMark }>[] => [
     { path: home, name: "Home", mark: "home" },
     { path: `${home}/Desktop`, name: "Desktop", mark: "desktop" },
     { path: `${home}/Documents`, name: "Documents", mark: "documents" },
@@ -223,7 +223,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
                 </SegmentedControl>}</div>
         </AppLayout.Header>
         <AppLayout.Content>
-            {at.file ? <FileView file={at.file} mode={fileMode} /> : <ContextMenu>
+            {at.file ? <FileView file={at.file} mode={fileMode} onOpen={() => { const file = at.file!; void status.run(null, () => openOver({ type: openTypeOf(file.name), uri: fileAddress(file.path) })) }} /> : <ContextMenu>
                 <ContextMenu.Trigger>
                     <div ref={entriesRef} className={`entries${entryDrag.around ? " drop-target" : ""}`}
                         style={{
@@ -297,7 +297,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
  * The path as steps: every folder above is a step back to it. In a narrow window only the current
  * step shows, and it opens a menu of the ones above it.
  */
-function Path({ path, home, marks, onGo }: Readonly<{ path: string, home: string, marks: ReadonlyMap<string, FolderMark>, onGo: (path: string) => void }>) {
+export function Path({ path, home, marks, onGo }: Readonly<{ path: string, home: string, marks: ReadonlyMap<string, FolderMark>, onGo: (path: string) => void }>) {
     const { narrow } = useAppLayout()
     const parts = path === "/" ? [] : path.slice(1).split("/")
     const steps = [{ path: "/", name: "Root" }, ...parts.map((name, index) => ({ path: `/${parts.slice(0, index + 1).join("/")}`, name }))]
@@ -327,7 +327,7 @@ function Path({ path, home, marks, onGo }: Readonly<{ path: string, home: string
     </div>
 }
 
-type CollectionProps = Readonly<{
+export type CollectionProps = Readonly<{
     marks: ReadonlyMap<string, FolderMark>
     entries: readonly Entry[]
     selected: readonly string[] | "all"
@@ -336,17 +336,18 @@ type CollectionProps = Readonly<{
     query: string
     problem: string | null
     loading: boolean
-    dragAndDropHooks: DragAndDropHooks
+    /** What entries may be dragged out and dropped on; none where nothing moves, such as a picker. */
+    dragAndDropHooks?: DragAndDropHooks
     /** The entry whose name is being changed in place. */
-    renaming: string | null
-    onRename: (entry: Entry, name: string | null) => void
+    renaming?: string | null
+    onRename?: (entry: Entry, name: string | null) => void
     /** Entries cut to be pasted elsewhere, shown faded until then. */
-    cut: readonly string[]
+    cut?: readonly string[]
 }>
 
 // As in every file manager, a press chooses one entry, with Command or Shift it adds more, and a
 // double press opens it.
-function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps & Readonly<{ sort: TableSort, onSort: (sort: TableSort) => void }>) {
+export function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, query, problem, loading, dragAndDropHooks, renaming = null, onRename, cut = [] }: CollectionProps & Readonly<{ sort: TableSort, onSort: (sort: TableSort) => void }>) {
     // With nothing to list, the columns have nothing to head: the line stands in the middle alone.
     if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
     return <ScrollArea axis="horizontal"><div className="list-columns"><Table aria-label="Entries" size="small" selectionMode="multiple" selectionBehavior="replace" value={selected} onChange={onSelect} onAction={onOpen} sort={sort} onSortChange={onSort} dragAndDropHooks={dragAndDropHooks} style={{ outline: "none" }}>
@@ -359,7 +360,7 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
         <Table.Body items={entries.map(entry => ({ ...entry, id: entry.path }))} dependencies={[renaming, cut, marks]}>
             {entry => <Table.Row id={entry.path} textValue={entry.name}>
                 <Table.Cell><span className={`name${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} />
-                    {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : entry.name}
+                    {renaming === entry.path && onRename ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : entry.name}
                 </span></Table.Cell>
                 <Table.Cell><span className="quiet">{formatModified(entry.modified)}</span></Table.Cell>
                 <Table.Cell><span className="quiet numeric">{formatSize(entry.size)}</span></Table.Cell>
@@ -369,12 +370,12 @@ function ListView({ marks, entries, selected, onSelect, sort, onSort, onOpen, qu
     </Table></div></ScrollArea>
 }
 
-function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading, dragAndDropHooks, renaming, onRename, cut }: CollectionProps) {
+function GridView({ marks, entries, selected, onSelect, onOpen, query, problem, loading, dragAndDropHooks, renaming = null, onRename, cut = [] }: CollectionProps) {
     if (!entries.length) return <Empty query={query} problem={problem} loading={loading} />
     return <GridList aria-label="Entries" selectionMode="multiple" selectionBehavior="replace" restColor="primary:subtle" itemWidth="6.5rem" style={{ alignContent: "start", outline: "none" }} value={selected} onChange={onSelect} onAction={key => onOpen(String(key))} dragAndDropHooks={dragAndDropHooks}>
         {entries.map(entry => <GridList.Item key={entry.path} id={entry.path} textValue={entry.name}>
             <span className={`tile${cut.includes(entry.path) ? " cut" : ""}`}><FileIcon kind={entry.kind} mark={marks.get(entry.path)} size={48} />
-                {renaming === entry.path ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : <span className="tile-name">{entry.name}</span>}
+                {renaming === entry.path && onRename ? <RenameField entry={entry} onDone={name => onRename(entry, name)} /> : <span className="tile-name">{entry.name}</span>}
             </span>
         </GridList.Item>)}
     </GridList>
@@ -428,7 +429,7 @@ function summary(entries: readonly Entry[], chosen: readonly Entry[]) {
 type Folder = Readonly<{ path: string, entries: readonly Entry[], problem: string | null, loading?: boolean }>
 
 /** One folder's entries as the machine has them, listed again whenever the folder changes. */
-function useFolder(path: string): Folder {
+export function useFolder(path: string): Folder {
     const [folder, setFolder] = useState<Folder>({ path, entries: [], problem: null, loading: true })
     const [version, setVersion] = useState(0)
     useEffect(() => followFolders(changed => { if (changed === path) setVersion(value => value + 1) }), [path])
@@ -556,7 +557,7 @@ function problemOf(error: unknown, failed = "Files could not open this folder.")
 }
 
 /** The usual folders of a home, those this machine has. */
-function usePlaces(home: string) {
+export function usePlaces(home: string) {
     const all = useMemo(() => placesOf(home), [home])
     const [found, setFound] = useState<readonly string[] | null>(null)
     useEffect(() => { void existing(all.map(place => place.path)).then(setFound) }, [all])
@@ -574,10 +575,10 @@ async function openWindow(entry: Entry) {
  * height, so the file never scrolls away. Around the file it keeps the same space as between the file
  * and its line of details, instead of the content's wider padding.
  */
-function FileView({ file, mode }: Readonly<{ file: Entry, mode: FileMode }>) {
+function FileView({ file, mode, onOpen }: Readonly<{ file: Entry, mode: FileMode, onOpen: () => void }>) {
     const [ref, padding] = useContentPadding()
     return <div ref={ref} className="file-view" style={{ margin: `calc(var(--file-gap) - ${padding.top}px)`, height: "calc(100cqh - 2 * var(--file-gap))" }}>
-        <Preview entry={file} mode={mode} />
+        <Preview entry={file} mode={mode} onOpen={onOpen} />
     </div>
 }
 
@@ -604,7 +605,7 @@ function useContentPadding() {
  * the drag is held over opens.
  */
 /** The places; choosing one also puts a narrow window's drawer away. */
-function Places({ places, place, onChoose: choose, transfer }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void, transfer: Transfer }>) {
+export function Places({ places, place, onChoose: choose, transfer }: Readonly<{ places: ReturnType<typeof usePlaces>, place: string | null, onChoose: (path: string | null) => void, transfer?: Transfer }>) {
     const { closeSidebar } = useAppLayout()
     const onChoose = (path: string | null) => { choose(path); closeSidebar() }
     const favorites = usePlaceDrop(transfer, choose)
@@ -663,12 +664,14 @@ function useTasks() {
 }
 
 /** Drops on places: into the place's folder, moved or copied as anywhere else. */
-function usePlaceDrop(transfer: Transfer, open: (path: string) => void) {
-    return useDragAndDrop({
+/** Drops on a place, or none without a transfer to make them, such as in a picker. */
+function usePlaceDrop(transfer: Transfer | undefined, open: (path: string) => void) {
+    const hooks = useDragAndDrop({
         getDropOperation: (target, types, allowed) => target.type === "item" ? dropOperation(types, allowed) : "cancel",
-        onItemDrop: event => void dropInto(event.items, String(event.target.key), event.dropOperation, transfer),
+        onItemDrop: event => { if (transfer) void dropInto(event.items, String(event.target.key), event.dropOperation, transfer) },
         onDropActivate: event => { if (event.target.type === "item") open(String(event.target.key)) }
     }).dragAndDropHooks
+    return transfer ? hooks : undefined
 }
 
 /** Narrow enough that the places would crowd the files out. */

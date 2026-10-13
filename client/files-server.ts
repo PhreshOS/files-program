@@ -3,7 +3,8 @@ import type { Process, ServerEndpoint } from "@phreshos/core"
 import type { Clipboard } from "../server/clipboard"
 import type { FolderEntry } from "../server/folders"
 import type { Task } from "../server/tasks"
-import { filesService } from "../server/launches"
+import { filesLaunch, pickerLaunch } from "../server/launches"
+import type { PickerRequest } from "../server/picker"
 import { kindOf, type Entry } from "./entries"
 
 /**
@@ -25,13 +26,13 @@ const followers = {
 }
 
 /**
- * The one Files Server every window uses, the "files" Service. It starts with the System; a window
- * that finds it gone starts it again.
+ * The one Files Server every window uses, in the Process named "files". It starts with the System; a
+ * window that finds it gone starts it again.
  */
 function server() {
     shared ??= (async () => {
         const program = await context.program()
-        const process = await program.findOrCreateProcess(filesService)
+        const process = await program.findOrCreateProcess(filesLaunch)
         await process.server.waitReady()
         process.server.subscribe("folder.changed", payload => { for (const follow of followers.folder) follow((payload as { path: string }).path) })
         process.server.subscribe("clipboard.changed", payload => { for (const follow of followers.clipboard) follow(payload as Clipboard) })
@@ -64,6 +65,25 @@ function entryOf(entry: FolderEntry): Entry {
     return entry.type === "folder"
         ? { path: entry.path, name: entry.name, kind: "folder", modified: entry.modified }
         : { path: entry.path, name: entry.name, kind: kindOf(entry.name), size: entry.size, modified: entry.modified }
+}
+
+export type { PickerRequest }
+
+/** The picker, the "file-picker-v1" Service this window chooses for, in its own Process of Files. */
+async function picker() {
+    return await (await context.program()).findOrCreateProcess(pickerLaunch)
+}
+
+/** The request a picker window was opened for. */
+export async function pickerRequest(request: string) {
+    return await (await picker()).server.ask<PickerRequest>("picker.request", { request })
+}
+
+/** What the person chose, or nothing when they cancel; either way the picker window closes. */
+export async function answerPicker(request: string, paths: readonly string[] | null) {
+    const process = await picker()
+    if (paths) await process.server.ask("picker.choose", { request, paths })
+    else await process.server.ask("picker.cancel", { request })
 }
 
 /** The home folder of the user running PhreshOS. */

@@ -1,11 +1,21 @@
 import type { Launch } from "@phreshos/core"
 
 /**
- * The Files Server is the "files" Service: the one Process that reaches the machine's files, found by
- * this name by every Files window and by other Programs, such as the Terminal showing a folder. It
- * starts with the System, so other Programs find it present, and starts the panel when it is on.
+ * The Files Server: the one Process that reaches the machine's files, found by this name by every
+ * Files window and by no other Program. It starts with the System, and starts the picker, and the
+ * panel when it is on.
  */
-export const filesService = { name: "files", server: true, client: false } as const satisfies Launch & { name: string }
+export const filesLaunch = { name: "files", server: true, client: false } as const satisfies Launch & { name: string }
+
+/**
+ * The picker: the one Service Files offers, for what a person takes part in, choosing a file to open
+ * or a place to save one. Its Process is named locally; its Service name is public across the System,
+ * with its version in it: a contract that changes takes a new name.
+ */
+export const pickerLaunch = { name: "picker", server: { service: "file-picker-v1" }, client: false } as const satisfies Launch & { name: string }
+
+/** The `view` of a Files window that asks a person to choose for another Program. */
+export const pickerView = "picker"
 
 /**
  * The panel: a Files window of its own in the `over` layer, at the edge of the screen. Like every

@@ -5,8 +5,10 @@ import { StrictMode, useEffect, useState } from "react"
 import client from "react-dom/client"
 import Files from "./files"
 import Panel from "./panel"
+import Picker from "./picker"
+import { pickerView } from "../server/launches"
 import FilesSettings from "./settings"
-import { entryAt, homePath } from "./files-server"
+import { entryAt, homePath, pickerRequest, type PickerRequest } from "./files-server"
 import { useFirstArrival } from "./readiness"
 import type { Entry } from "./entries"
 import "./style.css"
@@ -39,7 +41,7 @@ function View() {
     if (view === undefined) return null
     // The panel covers its own box, so nothing paints on the strip it waits as.
     if (view === "panel") return <Panel />
-    return <Loading>{view === "settings" ? <FilesSettings /> : <Home />}</Loading>
+    return <Loading>{view === "settings" ? <FilesSettings /> : view === pickerView ? <PickerHome /> : <Home />}</Loading>
 }
 
 /**
@@ -61,4 +63,23 @@ function Home() {
     if (start === undefined) return null
     if ("problem" in start) return <div className="empty"><p>{start.problem}</p><Button onPress={() => location.reload()}>Try again</Button></div>
     return <Files home={start.home} start={start.at} />
+}
+
+/** A picker window, once it knows the request it was opened for and where it starts browsing. */
+function PickerHome() {
+    const [start, setStart] = useState<Readonly<{ home: string, request: PickerRequest, folder: string }> | { problem: string }>()
+    useEffect(() => {
+        void (async () => {
+            const request = await context.options("request")
+            if (!request) throw new Error("This window was opened for no request.")
+            const [home, asked] = await Promise.all([homePath(), pickerRequest(request)])
+            // It starts in the folder the asker named, while that folder is there; else at home.
+            const folder = asked.kind !== "access" && asked.folder ? await entryAt(asked.folder).catch(() => null) : null
+            setStart({ home, request: asked, folder: folder?.kind === "folder" ? folder.path : home })
+        })().catch(error => setStart({ problem: error instanceof Error ? error.message : "Files could not reach its picker." }))
+    }, [])
+    useFirstArrival(start !== undefined)
+    if (start === undefined) return null
+    if ("problem" in start) return <div className="empty"><p>{start.problem}</p></div>
+    return <Picker home={start.home} folder={start.folder} request={start.request} />
 }

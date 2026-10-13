@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { ScrollArea, Spinner, useAppearance, useThemedValue } from "@phreshos/react-ui"
+import { Button, ScrollArea, Spinner, useAppearance, useThemedValue } from "@phreshos/react-ui"
+import { ExternalLink } from "@phreshos/react-ui/icons"
 import { marked } from "marked"
 import FileIcon from "./file-icon"
 import { extensionOf, formatModified, formatSize, kindNames, mediaTypeOf, type Entry } from "./entries"
@@ -33,9 +34,10 @@ type Loaded =
 
 /**
  * One file as it looks: the picture, the sound, the moving image, or the beginning of its text. A
- * file written as text and read as a page or a picture shows as it looks, or as its code.
+ * file written as text and read as a page or a picture shows as it looks, or as its code. Any file
+ * can also be handed to the System, to open in the Program that opens its kind.
  */
-export default function Preview({ entry, mode }: Readonly<{ entry: Entry, mode: FileMode }>) {
+export default function Preview({ entry, mode, onOpen }: Readonly<{ entry: Entry, mode: FileMode, onOpen: () => void }>) {
     const loaded = useContent(entry)
     const form = rendered[extensionOf(entry.name)]
     return <div className="preview">
@@ -47,8 +49,13 @@ export default function Preview({ entry, mode }: Readonly<{ entry: Entry, mode: 
                 : <Suspense fallback={<Loading name={entry.name} />}><TextView name={entry.name} text={loaded.text}
                     save={loaded.truncated ? undefined : text => saveFile(entry.path, text)} /></Suspense>)}
             {loaded.state === "media" && <Media url={loaded.url} type={loaded.type} name={entry.name} />}
-            {loaded.state === "none" && <div className="preview-none"><FileIcon kind={entry.kind} size={72} /><span>{loaded.reason}</span></div>}
+            {loaded.state === "none" && <div className="preview-none">
+                <FileIcon kind={entry.kind} size={72} />
+                <span>{loaded.reason}</span>
+                <OpenWith onOpen={onOpen} />
+            </div>}
         </div>
+        <div className="preview-footer">
         <div className="preview-details">
             <span>{kindNames[entry.kind]}</span>
             {entry.size !== undefined && <span>{formatSize(entry.size)}</span>}
@@ -56,7 +63,14 @@ export default function Preview({ entry, mode }: Readonly<{ entry: Entry, mode: 
             {loaded.state === "text" && loaded.truncated && <span>Showing the first {formatSize(textLimit)}</span>}
             <span className="preview-path" title={entry.path}><span dir="ltr">{entry.path}</span></span>
         </div>
+        <OpenWith onOpen={onOpen} />
+        </div>
     </div>
+}
+
+/** Hands the file to the System, which opens it in the Program chosen for its kind. */
+function OpenWith({ onOpen }: Readonly<{ onOpen: () => void }>) {
+    return <Button size="xsmall" depth="flat" onPress={onOpen}><ExternalLink />Open with</Button>
 }
 
 function Media({ url, type, name }: Readonly<{ url: string, type: string, name: string }>) {

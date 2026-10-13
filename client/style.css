@@ -246,6 +246,14 @@ header [role="toolbar"],
     opacity: 0.7;
 }
 
+.preview-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+}
+
 .preview-details {
     display: flex;
     gap: 1rem;

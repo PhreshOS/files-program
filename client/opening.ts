@@ -5,6 +5,11 @@ export function terminalAddress(path: string) {
     return `terminal://${path.split("/").map(encodeURIComponent).join("/")}`
 }
 
+/** A file or folder as a `file:` address, as the System opens it. */
+export function fileAddress(path: string) {
+    return `file://${path.split("/").map(encodeURIComponent).join("/")}`
+}
+
 /** The folder a `file:` address names when Files was opened to show it, or `null`. */
 export function openedFolder(opened: OpenTarget | null) {
     if (opened?.type !== "inode/directory" || !opened.uri.startsWith("file:")) return null

@@ -43,6 +43,19 @@ export function mediaTypeOf(name: string): string | undefined {
     return mediaTypes[extensionOf(name)]
 }
 
+/** Types Files does not show as media, known so another Program can open them. */
+const otherTypes: Readonly<Record<string, string>> = {
+    excalidraw: "application/vnd.excalidraw+json",
+    json: "application/json", md: "text/markdown", markdown: "text/markdown", txt: "text/plain", csv: "text/csv",
+    xml: "application/xml", zip: "application/zip", js: "text/javascript", mjs: "text/javascript", css: "text/css"
+}
+
+/** The exact type a file is opened as, by another Program: its own where known, bytes otherwise. */
+export function openTypeOf(name: string): string {
+    const extension = extensionOf(name)
+    return mediaTypes[extension] ?? otherTypes[extension] ?? "application/octet-stream"
+}
+
 export const kindNames: Readonly<Record<Entry["kind"], string>> = {
     folder: "Folder", text: "Text", image: "Image", audio: "Audio", video: "Video", code: "Code", archive: "Archive", pdf: "PDF document", file: "File"
 }

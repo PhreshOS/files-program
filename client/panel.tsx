@@ -5,7 +5,8 @@ import { Button, ContextMenu, DropdownMenu, Loading, Menu, ScrollArea, Spinner, 
 import { ChevronDown, Pin, PinOff, SquareArrowOutUpRight } from "@phreshos/react-ui/icons"
 import FileIcon, { type FolderMark } from "./file-icon"
 import { sortEntries, type Entry } from "./entries"
-import { existing, followClipboard, followFolders, homePath, listFolder, type Clipboard } from "./files-server"
+import { existing, followClipboard, followFolders, listFolder, machine, type Clipboard } from "./files-server"
+import { join, nameOf, rootName, rootsOf } from "./paths"
 import EntryMenu, { type MenuPlace } from "./panel-menu"
 import { Arrival } from "./readiness"
 import Shelf from "./shelf"
@@ -32,13 +33,13 @@ type Place = Readonly<{ path: string, name: string, mark: FolderMark }>
 
 const placesOf = (home: string): readonly Place[] => [
     { path: home, name: "Home", mark: "home" },
-    { path: `${home}/Desktop`, name: "Desktop", mark: "desktop" },
-    { path: `${home}/Documents`, name: "Documents", mark: "documents" },
-    { path: `${home}/Downloads`, name: "Downloads", mark: "downloads" },
-    { path: `${home}/Pictures`, name: "Pictures", mark: "pictures" },
-    { path: `${home}/Music`, name: "Music", mark: "music" },
-    { path: `${home}/Videos`, name: "Videos", mark: "videos" },
-    { path: `${home}/Movies`, name: "Movies", mark: "videos" }
+    { path: join(home, "Desktop"), name: "Desktop", mark: "desktop" },
+    { path: join(home, "Documents"), name: "Documents", mark: "documents" },
+    { path: join(home, "Downloads"), name: "Downloads", mark: "downloads" },
+    { path: join(home, "Pictures"), name: "Pictures", mark: "pictures" },
+    { path: join(home, "Music"), name: "Music", mark: "music" },
+    { path: join(home, "Videos"), name: "Videos", mark: "videos" },
+    { path: join(home, "Movies"), name: "Movies", mark: "videos" }
 ]
 
 /**
@@ -167,7 +168,7 @@ export default function Panel() {
     useEffect(() => {
         void (async () => {
             const program = await context.program()
-            const [path, remembered] = await Promise.all([homePath(), program.store.get<string>(rootKey)])
+            const [{ home: path }, remembered] = await Promise.all([machine(), program.store.get<string>(rootKey)])
             // A remembered folder that is gone gives way to the home folder.
             const found = remembered ? await existing([remembered]).catch(() => []) : []
             setHome(path)
@@ -181,7 +182,7 @@ export default function Panel() {
     const listings = useListings(folders)
     const entries = new Map([...listings.values()].flat().map(entry => [entry.path, entry]))
     const place = places.find(item => item.path === root)
-    const rootName = place?.name ?? root?.slice(root.lastIndexOf("/") + 1) ?? "Files"
+    const shownName = place?.name ?? (root ? nameOf(root) : "Files")
 
     // The entry a right press was on; on no entry, the folder the tree shows.
     const [clipboard, setClipboard] = useState<Clipboard | undefined>(undefined)
@@ -191,7 +192,7 @@ export default function Panel() {
         const row = target instanceof Element ? target.closest("[role=row][data-key]") : null
         const entry = row && entries.get(row.getAttribute("data-key")!)
         if (entry) setMenuFor({ entry, place: "tree" })
-        else if (root) setMenuFor({ entry: { path: root, name: rootName, kind: "folder", modified: 0 }, place: "root" })
+        else if (root) setMenuFor({ entry: { path: root, name: shownName, kind: "folder", modified: 0 }, place: "root" })
     }
     // A folder pressed twice becomes the one the tree shows.
     function showFolderUnder(target: EventTarget) {
@@ -267,21 +268,21 @@ export default function Panel() {
         <Arrival arrived={root !== null && listings.has(root) && found !== null && clipboard !== undefined} />
         <div className="panel-header">
             <DropdownMenu>
-                <DropdownMenu.Trigger depth="none" size="small" style={{ minWidth: 0, flexShrink: 1 }} aria-label={`${rootName}, change folder`}>
-                    <FileIcon kind="folder" mark={place?.mark} size={16} /><span className="panel-root">{rootName}</span><ChevronDown />
+                <DropdownMenu.Trigger depth="none" size="small" style={{ minWidth: 0, flexShrink: 1 }} aria-label={`${shownName}, change folder`}>
+                    <FileIcon kind="folder" mark={place?.mark} size={16} /><span className="panel-root">{shownName}</span><ChevronDown />
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
                     <Menu aria-label="Show a folder" size="small" onAction={key => showFolder(String(key))}>
                         {places.filter(item => found?.includes(item.path)).map(item => <Menu.Item key={item.path} id={item.path}>
                             <FileIcon kind="folder" mark={item.mark} />{item.name}
                         </Menu.Item>)}
-                        <Menu.Item id="/"><FileIcon kind="drive" />Root</Menu.Item>
+                        {rootsOf().map(drive => <Menu.Item key={drive} id={drive}><FileIcon kind="drive" />{rootName(drive)}</Menu.Item>)}
                     </Menu>
                 </DropdownMenu.Content>
             </DropdownMenu>
             <span className="panel-spacer" />
             {doing && <Spinner size="small" label={doing} />}
-            <Button iconOnly depth="none" size="xsmall" aria-label="Open in Files" onPress={() => root && void openInFiles(root, rootName)}><SquareArrowOutUpRight /></Button>
+            <Button iconOnly depth="none" size="xsmall" aria-label="Open in Files" onPress={() => root && void openInFiles(root, shownName)}><SquareArrowOutUpRight /></Button>
             <Button iconOnly depth="none" size="xsmall" aria-label={pinned ? "Unpin" : "Keep open"} aria-pressed={pinned} onPress={() => setPinned(!pinned)}>{pinned ? <PinOff /> : <Pin />}</Button>
         </div>
         <ContextMenu>
@@ -289,10 +290,10 @@ export default function Panel() {
                 <ScrollArea className="panel-tree" onContextMenuCapture={event => menuUnder(event.target)} onDoubleClick={event => showFolderUnder(event.target)}>
                     {/* A folder chosen for the tree shows once it has been read. */}
                     {root && (listings.has(root)
-                        ? <Tree aria-label={rootName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
+                        ? <Tree aria-label={shownName} size="small" expanded={expanded} onExpandedChange={setExpanded} onAction={act} dragAndDropHooks={dragAndDropHooks}>
                             {renderFolder(root)}
                         </Tree>
-                        : <div className="panel-reading"><Spinner size="small" label={`Reading ${rootName}`} /></div>)}
+                        : <div className="panel-reading"><Spinner size="small" label={`Reading ${shownName}`} /></div>)}
                 </ScrollArea>
             </ContextMenu.Trigger>
             <ContextMenu.Content>

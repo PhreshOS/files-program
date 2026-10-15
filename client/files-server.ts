@@ -6,6 +6,7 @@ import type { Task } from "../server/tasks"
 import { filesLaunch, pickerLaunch } from "../server/launches"
 import type { PickerRequest } from "../server/picker"
 import { kindOf, type Entry } from "./entries"
+import { learn, parentOf, type Machine } from "./paths"
 
 /**
  * The one Files Server, as a window reaches it: its questions, and what it announces to every
@@ -86,9 +87,11 @@ export async function answerPicker(request: string, paths: readonly string[] | n
     else await process.server.ask("picker.cancel", { request })
 }
 
-/** The home folder of the user running PhreshOS. */
-export function homePath() {
-    return ask<string>("home")
+/** The machine PhreshOS runs on: the home folder of its user, and how it spells its paths, learned here for every window. */
+export async function machine() {
+    const found = await ask<Machine>("machine")
+    learn(found)
+    return found
 }
 
 /** The entries directly inside one folder. */
@@ -144,7 +147,7 @@ export function followShelf(follow: (entries: readonly Entry[]) => void) {
         held = entries.map(entryOf)
         follow(held)
     })
-    const changed = (path: string) => { if (held.some(entry => entry.path.slice(0, entry.path.lastIndexOf("/")) === path)) list() }
+    const changed = (path: string) => { if (held.some(entry => parentOf(entry.path) === path)) list() }
     followers.shelf.add(list)
     followers.folder.add(changed)
     list()

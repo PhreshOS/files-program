@@ -2,7 +2,7 @@ import { basename, dirname } from "node:path"
 import { context } from "@phreshos/server"
 import { z } from "zod"
 import { clipboardHolder } from "./clipboard"
-import { entryAt, existingFolders, home, listFolder, readFile } from "./folders"
+import { absolutePath, entryAt, existingFolders, listFolder, machine, readFile } from "./folders"
 import { copyEntries, createFile, createFolder, moveEntries, renameEntry, saveText, trashEntries, writeNewFile } from "./operations"
 import { shelfHolder } from "./shelf"
 import { taskList } from "./tasks"
@@ -11,7 +11,6 @@ import { filesLaunch, panelLaunch, panelShown, pickerLaunch } from "./launches"
 
 const program = await context.program()
 
-const absolutePath = z.string().startsWith("/")
 
 /** A place on the Desktop's plane: pixels, or a share of the view such as "50% - 200". */
 const value = z.union([z.number(), z.string().min(1).max(100)])
@@ -55,7 +54,7 @@ async function task<Result>(folders: readonly string[], ...[kind, title, unit, o
 const quoted = (name: string) => `“${name}”`
 
 /** An entry or a folder in a task's title, by its name. */
-const named = (path: string) => quoted(basename(path) || "/")
+const named = (path: string) => quoted(basename(path) || path)
 
 /** Some entries in a task's title: one by its name, several by their number. */
 const entriesIn = (paths: readonly string[]) => paths.length === 1 ? named(paths[0]!) : `${paths.length} items`
@@ -105,11 +104,11 @@ if (await program.store.get<boolean>(panelShown)) await program.findOrCreateProc
  */
 context.answer("path.show", async ({ payload }) => {
     const { path, position } = z.object({ path: absolutePath, position: z.object({ x: value, y: value }).optional() }).parse(payload)
-    await program.createProcess({ server: false, client: { title: basename(path) || "/", ...(position ? { position } : {}) }, options: { path } })
+    await program.createProcess({ server: false, client: { title: basename(path) || path, ...(position ? { position } : {}) }, options: { path } })
 })
 
 /** The home folder of the user running PhreshOS, where Files opens. */
-context.answer("home", () => home())
+context.answer("machine", () => machine())
 
 /** The entries directly inside one folder, which is watched from then on. */
 context.answer("folder.list", async ({ payload }) => {

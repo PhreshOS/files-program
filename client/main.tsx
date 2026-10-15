@@ -8,7 +8,7 @@ import Panel from "./panel"
 import Picker from "./picker"
 import { pickerView } from "../server/launches"
 import FilesSettings from "./settings"
-import { entryAt, homePath, pickerRequest, type PickerRequest } from "./files-server"
+import { entryAt, machine, pickerRequest, type PickerRequest } from "./files-server"
 import { useFirstArrival } from "./readiness"
 import type { Entry } from "./entries"
 import "./style.css"
@@ -53,7 +53,7 @@ function Home() {
     useEffect(() => {
         void (async () => {
             // A path it was given, or a folder it was opened to show.
-            const [home, given, opened] = await Promise.all([homePath(), context.options("path"), context.opened()])
+            const [{ home }, given, opened] = await Promise.all([machine(), context.options("path"), context.opened()])
             const path = given ?? openedFolder(opened)
             const at = path ? await entryAt(path).catch(() => null) : null
             setStart(path && !at ? { problem: "This folder or file no longer exists, or Files cannot reach it." } : { home, at })
@@ -72,7 +72,7 @@ function PickerHome() {
         void (async () => {
             const request = await context.options("request")
             if (!request) throw new Error("This window was opened for no request.")
-            const [home, asked] = await Promise.all([homePath(), pickerRequest(request)])
+            const [{ home }, asked] = await Promise.all([machine(), pickerRequest(request)])
             // It starts in the folder the asker named, while that folder is there; else at home.
             const folder = asked.kind !== "access" && asked.folder ? await entryAt(asked.folder).catch(() => null) : null
             setStart({ home, request: asked, folder: folder?.kind === "folder" ? folder.path : home })

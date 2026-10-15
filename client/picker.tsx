@@ -3,6 +3,7 @@ import { opensType } from "@phreshos/core"
 import { AlertDialog, AppLayout, Button, Code, Input, Text, useAppearance, useScale, type TableSort } from "@phreshos/react-ui"
 import { FolderPlus } from "@phreshos/react-ui/icons"
 import { openTypeOf, sortEntries, type Entry } from "./entries"
+import { isRoot, join, nameAllowed } from "./paths"
 import { ListView, Path, Places, placesOf, useFolder, usePlaces } from "./files"
 import { answerPicker, createFolder, type PickerRequest } from "./files-server"
 import { useFirstArrival } from "./readiness"
@@ -94,13 +95,13 @@ function Choose({ home, folder: start, request }: Readonly<{ home: string, folde
         const existing = folder.entries.find(entry => entry.name === trimmed)
         if (existing?.kind === "folder") return go(existing.path)
         if (existing) return setReplacing(existing)
-        send([`${folderPath === "/" ? "" : folderPath}/${trimmed}`])
+        send([join(folderPath, trimmed)])
     }
 
     const asker = request.asker?.name ?? "A script"
     const asks = request.kind === "save" ? `${asker} asks where to save` : request.multiple ? `${asker} asks for files to open` : `${asker} asks for a file to open`
-    const place = places.find(item => item.path === folderPath)?.path ?? (folderPath === "/" ? "/" : null)
-    const ready = request.kind === "save" ? name.trim() !== "" && !name.includes("/") : files.length > 0
+    const place = places.find(item => item.path === folderPath)?.path ?? (isRoot(folderPath) ? folderPath : null)
+    const ready = request.kind === "save" ? nameAllowed(name.trim()) : files.length > 0
 
     return <AppLayout style={{ paddingInlineEnd: "0.625rem", paddingBottom: "0.625rem" }}>
         <AppLayout.Title style={{ fontSize: "1.125rem", paddingInline: "0.875rem" }}>{request.kind === "save" ? "Save" : "Open"}</AppLayout.Title>

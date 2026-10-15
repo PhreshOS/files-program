@@ -3,6 +3,8 @@ import { readFile, writeFile } from "node:fs/promises"
 import { context, system } from "@phreshos/server"
 import type { EndpointMetadata } from "@phreshos/core"
 import { z } from "zod"
+import { sep } from "node:path"
+import { absolutePath } from "./folders"
 import { pickerView } from "./launches"
 
 /**
@@ -27,15 +29,15 @@ const types = z.array(z.string().regex(/^[\w.+-]+\/(\*|[\w.+-]+)$/)).max(100).op
 const contract = {
     // One file, or several, of the given types; any file when none are given. Each starts browsing in
     // the folder given, or the home folder.
-    open: z.object({ types, multiple: z.boolean().default(false), folder: z.string().startsWith("/").max(4096).optional(), position }),
+    open: z.object({ types, multiple: z.boolean().default(false), folder: absolutePath.optional(), position }),
     // A place and a name for a new file, starting from a suggested name.
-    save: z.object({ name: z.string().min(1).max(255).optional(), type: z.string().max(200).optional(), folder: z.string().startsWith("/").max(4096).optional(), position }),
+    save: z.object({ name: z.string().min(1).max(255).optional(), type: z.string().max(200).optional(), folder: absolutePath.optional(), position }),
     // A path the asker names, to read, or to read and write.
-    access: z.object({ path: z.string().startsWith("/").max(4096), mode: z.enum(["read", "write"]), position }),
-    read: z.object({ path: z.string().startsWith("/").max(4096) }),
-    write: z.object({ path: z.string().startsWith("/").max(4096), content: z.union([z.string(), z.instanceof(Uint8Array)]) }),
+    access: z.object({ path: absolutePath, mode: z.enum(["read", "write"]), position }),
+    read: z.object({ path: absolutePath }),
+    write: z.object({ path: absolutePath, content: z.union([z.string(), z.instanceof(Uint8Array)]) }),
     request: z.object({ request: z.string().uuid() }),
-    choose: z.object({ request: z.string().uuid(), paths: z.array(z.string().startsWith("/")).min(1).max(10_000) })
+    choose: z.object({ request: z.string().uuid(), paths: z.array(absolutePath).min(1).max(10_000) })
 }
 
 /** Who asks, as the person sees it in the window. */
@@ -75,7 +77,7 @@ async function grant(asker: EndpointMetadata | null, paths: readonly string[], m
 function require(asker: EndpointMetadata | null, path: string, mode: Mode) {
     const held = asker ? grants.get(asker.process) : undefined
     const reaches = held && [...held].some(([granted, given]) =>
-        (path === granted || path.startsWith(granted.endsWith("/") ? granted : `${granted}/`)) && (mode === "read" || given === "write"))
+        (path === granted || path.startsWith(granted.endsWith(sep) ? granted : `${granted}${sep}`)) && (mode === "read" || given === "write"))
     if (!reaches) throw new Error(`The person has not let this Program ${mode} ${path}`)
 }
 

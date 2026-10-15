@@ -4,7 +4,8 @@ import { ArrowLeft, ArrowRight, ChevronDown, ClipboardPaste, CodeXml, CopyPlus, 
 import FileIcon, { type FolderMark } from "./file-icon"
 import Preview, { showsBothWays, type FileMode } from "./preview"
 import WallpaperSubmenu, { WallpaperMenu, wallpaperType } from "./wallpaper"
-import { formatModified, formatSize, kindNames, openTypeOf, parentOf, sortEntries, type Entry } from "./entries"
+import { formatModified, formatSize, kindNames, openTypeOf, sortEntries, type Entry } from "./entries"
+import { isRoot, join, parentOf, rootName, rootsOf, stepsOf, within } from "./paths"
 import { useFirstArrival } from "./readiness"
 import { besideThisWindow, openFilesWindow, openOver } from "./windows"
 import { fileAddress, terminalAddress } from "./opening"
@@ -25,13 +26,13 @@ type Location = Readonly<{ at: Place, back: readonly Place[], forward: readonly 
 // Favorites later sits among them as an equal.
 export const placesOf = (home: string): readonly Readonly<{ path: string, name: string, mark: FolderMark }>[] => [
     { path: home, name: "Home", mark: "home" },
-    { path: `${home}/Desktop`, name: "Desktop", mark: "desktop" },
-    { path: `${home}/Documents`, name: "Documents", mark: "documents" },
-    { path: `${home}/Downloads`, name: "Downloads", mark: "downloads" },
-    { path: `${home}/Pictures`, name: "Pictures", mark: "pictures" },
-    { path: `${home}/Music`, name: "Music", mark: "music" },
-    { path: `${home}/Videos`, name: "Videos", mark: "videos" },
-    { path: `${home}/Movies`, name: "Movies", mark: "videos" }
+    { path: join(home, "Desktop"), name: "Desktop", mark: "desktop" },
+    { path: join(home, "Documents"), name: "Documents", mark: "documents" },
+    { path: join(home, "Downloads"), name: "Downloads", mark: "downloads" },
+    { path: join(home, "Pictures"), name: "Pictures", mark: "pictures" },
+    { path: join(home, "Music"), name: "Music", mark: "music" },
+    { path: join(home, "Videos"), name: "Videos", mark: "videos" },
+    { path: join(home, "Movies"), name: "Movies", mark: "videos" }
 ]
 
 /**
@@ -186,7 +187,7 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
     const colors = useThemedValue(useAppearance().colors)
     const cut = clipboard?.mode === "cut" ? clipboard.paths : []
 
-    const place = places.find(item => item.path === at.path)?.path ?? (at.path === "/" ? "/" : null)
+    const place = places.find(item => item.path === at.path)?.path ?? (isRoot(at.path) ? at.path : null)
 
     const goToPlace = (path: string | null) => { if (path) go(path) }
 
@@ -299,10 +300,9 @@ export default function Files({ home, start }: Readonly<{ home: string, start: E
  */
 export function Path({ path, home, marks, onGo }: Readonly<{ path: string, home: string, marks: ReadonlyMap<string, FolderMark>, onGo: (path: string) => void }>) {
     const { narrow } = useAppLayout()
-    const parts = path === "/" ? [] : path.slice(1).split("/")
-    const steps = [{ path: "/", name: "Root" }, ...parts.map((name, index) => ({ path: `/${parts.slice(0, index + 1).join("/")}`, name }))]
+    const steps = stepsOf(path)
     // Inside the home folder, the path starts there.
-    const start = path === home || path.startsWith(`${home}/`) ? steps.findIndex(step => step.path === home) : 0
+    const start = within(path, home) ? steps.findIndex(step => step.path === home) : 0
     const all = steps.slice(start).map(step => step.path === home ? { ...step, name: "Home" } : step)
     const above = all.slice(0, -1)
 
@@ -313,7 +313,7 @@ export function Path({ path, home, marks, onGo }: Readonly<{ path: string, home:
             <DropdownMenu.Content>
                 <Menu aria-label="Folders above" size="small" onAction={key => onGo(String(key))}>
                     {[...above].reverse().map(step => <Menu.Item key={step.path} id={step.path}>
-                        <FileIcon kind={step.path === "/" ? "drive" : "folder"} mark={marks.get(step.path)} />{step.name}
+                        <FileIcon kind={isRoot(step.path) ? "drive" : "folder"} mark={marks.get(step.path)} />{step.name}
                     </Menu.Item>)}
                 </Menu>
             </DropdownMenu.Content>
@@ -619,7 +619,7 @@ export function Places({ places, place, onChoose: choose, transfer }: Readonly<{
         </Tree>
         <div className="places-heading">This machine</div>
         <Tree aria-label="This machine" selectionMode="single" value={place} onChange={onChoose} dragAndDropHooks={machine}>
-            <Tree.Item id="/" textValue="Root"><Tree.Content><FileIcon kind="drive" size={18} />Root</Tree.Content></Tree.Item>
+            {rootsOf().map(root => <Tree.Item key={root} id={root} textValue={rootName(root)}><Tree.Content><FileIcon kind="drive" size={18} />{rootName(root)}</Tree.Content></Tree.Item>)}
         </Tree>
     </nav>
 }

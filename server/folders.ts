@@ -1,8 +1,10 @@
-import { createReadStream } from "node:fs"
+import { createReadStream, existsSync } from "node:fs"
 import { lstat, readdir, stat } from "node:fs/promises"
 import { Readable } from "node:stream"
 import { homedir } from "node:os"
-import { basename, join } from "node:path"
+import { basename, isAbsolute, join, sep } from "node:path"
+import { z } from "zod"
+import type { Machine } from "../client/paths"
 
 /** One entry of a folder, as the Server answers it. */
 export type FolderEntry = Readonly<{
@@ -16,8 +18,18 @@ export type FolderEntry = Readonly<{
     modified: number
 }>
 
-export function home() {
-    return homedir()
+/** A path as this machine spells it, from one of its roots: `/home/me`, or `C:\Users\me` on Windows. */
+export const absolutePath = z.string().max(4096).refine(isAbsolute, "A path must start from a root of this machine")
+
+/**
+ * The machine PhreshOS runs on, as Files' windows need it: the home folder of its user, and how it
+ * spells its paths. Windows has a root per drive, every one found here.
+ */
+export function machine(): Machine {
+    const roots = process.platform === "win32"
+        ? [..."CDEFGHIJKLMNOPQRSTUVWXYZ"].map(letter => `${letter}:\\`).filter(root => existsSync(root))
+        : ["/"]
+    return { home: homedir(), separator: sep === "\\" ? "\\" : "/", roots }
 }
 
 /**
@@ -39,7 +51,7 @@ export async function listFolder(path: string): Promise<FolderEntry[]> {
 /** One entry by its path, as a folder lists it. */
 export async function entryAt(path: string): Promise<FolderEntry> {
     const details = await stat(path)
-    const name = basename(path) || "/"
+    const name = basename(path) || path
     return details.isDirectory()
         ? { path, name, type: "folder", modified: details.mtimeMs }
         : { path, name, type: "file", size: details.size, modified: details.mtimeMs }

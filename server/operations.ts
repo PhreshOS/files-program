@@ -1,7 +1,7 @@
 import { createReadStream, createWriteStream } from "node:fs"
 import { chmod, lstat, mkdir, readdir, readlink, rename, rm, stat, symlink, utimes, writeFile } from "node:fs/promises"
 import { homedir, platform } from "node:os"
-import { basename, dirname, join } from "node:path"
+import { basename, dirname, join, sep } from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 
@@ -72,7 +72,7 @@ async function exists(path: string) {
 /** A name to give an entry: one that cannot leave its folder or name nothing. */
 export function checkName(name: string) {
     if (!name.trim()) throw new Error("A name cannot be empty.")
-    if (name.includes("/") || name.includes("\0")) throw new Error("A name cannot contain “/”.")
+    if (name.includes("/") || name.includes(sep) || name.includes("\0")) throw new Error(`A name cannot contain “${sep}”.`)
     if (name === "." || name === "..") throw new Error(`“${name}” cannot be a name.`)
     if (Buffer.byteLength(name) > 255) throw new Error("This name is too long.")
     return name
@@ -144,7 +144,7 @@ export async function renameEntry(path: string, name: string) {
 }
 
 function inside(path: string, folder: string) {
-    return path === folder || path.startsWith(folder === "/" ? "/" : `${folder}/`)
+    return path === folder || path.startsWith(folder.endsWith(sep) ? folder : `${folder}${sep}`)
 }
 
 function refuseInsideItself(path: string, destination: string) {
@@ -222,7 +222,7 @@ export async function trashEntries(paths: readonly string[], progress: Progress 
     const changed = new Set<string>()
     for (const path of paths) {
         progress.signal?.throwIfAborted()
-        if (inside(trash.files, path)) throw new Error(`“${basename(path) || "/"}” holds the Trash itself.`)
+        if (inside(trash.files, path)) throw new Error(`“${basename(path) || path}” holds the Trash itself.`)
         const name = await freeName(trash.files, basename(path), { isFolder: await isFolder(path) })
         if (trash.info) {
             const date = new Date(), pad = (value: number) => String(value).padStart(2, "0")

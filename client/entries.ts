@@ -60,12 +60,6 @@ export const kindNames: Readonly<Record<Entry["kind"], string>> = {
     folder: "Folder", text: "Text", image: "Image", audio: "Audio", video: "Video", code: "Code", archive: "Archive", pdf: "PDF document", file: "File"
 }
 
-export function parentOf(path: string) {
-    if (path === "/") return null
-    const parent = path.slice(0, path.lastIndexOf("/"))
-    return parent === "" ? "/" : parent
-}
-
 export function formatSize(size: number | undefined) {
     if (size === undefined) return ""
     if (size < 1000) return `${size} B`

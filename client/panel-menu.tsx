@@ -1,6 +1,7 @@
 import { Menu } from "@phreshos/react-ui"
 import { Archive, ArchiveX, ClipboardPaste, Copy, CopyPlus, FilePlus, FolderPlus, Link, Scissors, SquareArrowOutUpRight, Trash2 } from "@phreshos/react-ui/icons"
 import type { Entry } from "./entries"
+import { parentOf } from "./paths"
 import { copyEntries, createFile, createFolder, paste, setClipboard, shelve, trashEntries, unshelve, type Clipboard } from "./files-server"
 import WallpaperSubmenu, { wallpaperType } from "./wallpaper"
 import type { Work } from "./work"
@@ -21,7 +22,7 @@ export default function EntryMenu({ entry, place, clipboard, onOpen, work }: Rea
     work: Work
 }>) {
     const folder = entry.kind === "folder"
-    const parent = entry.path.slice(0, entry.path.lastIndexOf("/")) || "/"
+    const parent = parentOf(entry.path) ?? entry.path
     function run(action: string) {
         switch (action) {
             case "open": onOpen(entry); break

@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises"
-import { join } from "node:path"
+import { join, sep } from "node:path"
 
 /**
  * The shelf: entries kept at hand, the same in every Files window, and announced whenever it
@@ -19,6 +19,6 @@ export async function shelfHolder(folder: string, announce: (paths: readonly str
         add: (added: readonly string[]) => set([...new Set([...added, ...paths])]),
         remove: (removed: readonly string[]) => set(paths.filter(path => !removed.includes(path))),
         /** Whether an entry lives in the shelf's own folder, so nothing else holds it. */
-        owns: (path: string) => path.startsWith(folder + "/")
+        owns: (path: string) => path.startsWith(folder + sep)
     }
 }
